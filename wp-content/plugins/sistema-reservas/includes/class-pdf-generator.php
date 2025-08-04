@@ -152,23 +152,23 @@ class ReservasPDFGenerator
     /**
      * Generar el contenido del billete
      */
-    private function generate_ticket_content($pdf)
-    {
-        // Configurar fuente por defecto
-        $pdf->SetFont('helvetica', '', 9);
+private function generate_ticket_content($pdf)
+{
+    // Configurar fuente por defecto
+    $pdf->SetFont('helvetica', '', 9);
 
-        // ========== SECCIÓN PRINCIPAL DEL BILLETE ==========
-        $this->generate_main_ticket_section($pdf);
+    // ========== SECCIÓN PRINCIPAL DEL BILLETE ==========
+    $this->generate_main_ticket_section($pdf);
 
-        // ========== SECCIÓN DEL TALÓN (DESPRENDIBLE) ==========
-        $this->generate_stub_section($pdf);
+    // ========== SECCIÓN DEL TALÓN (DESPRENDIBLE) ==========
+    $this->generate_stub_section($pdf);
 
-        // ========== CONDICIONES DE COMPRA ==========
-        $this->generate_conditions_section($pdf);
+    // ========== CONDICIONES DE COMPRA ==========
+    $this->generate_conditions_section($pdf);
 
-        // ✅ AÑADIR CÓDIGO DE BARRAS AL FINAL
-        $this->generate_simple_barcode($pdf, 245);
-    }
+    // ✅ CÓDIGO DE BARRAS MOVIDO MÁS ABAJO PARA DAR ESPACIO A LA IMAGEN
+    $this->generate_simple_barcode($pdf, 270); // Cambiado de 245 a 270
+}
 
 
 
@@ -415,30 +415,101 @@ $pdf->Cell(66, 3, 'Código: ' . $codigo_completo, 0, 1, 'C');
     /**
      * Sección de condiciones de compra
      */
-    private function generate_conditions_section($pdf)
-    {
-        $y_start = 155;
+private function generate_conditions_section($pdf)
+{
+    $y_start = 155;
 
-        $pdf->SetFont('helvetica', 'B', 9);
-        $pdf->SetXY(15, $y_start);
-        $pdf->Cell(0, 5, 'CONDICIONES DE COMPRA', 0, 1, 'C');
+    $pdf->SetFont('helvetica', 'B', 9);
+    $pdf->SetXY(15, $y_start);
+    $pdf->Cell(0, 5, 'CONDICIONES DE COMPRA', 0, 1, 'C');
 
-        $pdf->SetFont('helvetica', '', 6);
-        $conditions_text = "La adquisición de la entrada supone la aceptación de las siguientes condiciones- No se admiten devoluciones ni cambios de entradas.- La Organización no garantiza la autenticidad de la entrada si ésta no ha sido adquirida en los puntos oficiales de venta.- En caso de suspensión del servicio, la devolución se efectuará por la Organización dentro del plazo de 15 días de la fecha de celebración.- En caso de suspensión del servicio, una vez iniciado, no habrá derecho a devolución del importe de la entrada.- La Organización no se responsabiliza de posibles demoras ajenas a su voluntad.- Es potestad de la Organización permitir la entrada al servicio una vez haya empezado.- La admisión se supedita a la disposición de la entrada en buenas condiciones.- Debe de estar en el punto de salida 10 minutos antes de la hora prevista de partida.";
+    $pdf->SetFont('helvetica', '', 6);
+    $conditions_text = "La adquisición de la entrada supone la aceptación de las siguientes condiciones- No se admiten devoluciones ni cambios de entradas.- La Organización no garantiza la autenticidad de la entrada si ésta no ha sido adquirida en los puntos oficiales de venta.- En caso de suspensión del servicio, la devolución se efectuará por la Organización dentro del plazo de 15 días de la fecha de celebración.- En caso de suspensión del servicio, una vez iniciado, no habrá derecho a devolución del importe de la entrada.- La Organización no se responsabiliza de posibles demoras ajenas a su voluntad.- Es potestad de la Organización permitir la entrada al servicio una vez haya empezado.- La admisión se supedita a la disposición de la entrada en buenas condiciones.- Debe de estar en el punto de salida 10 minutos antes de la hora prevista de partida.";
 
-        $pdf->SetXY(15, $y_start + 7);
-        $pdf->MultiCell(180, 3, $conditions_text, 1, 'J');
+    $pdf->SetXY(15, $y_start + 7);
+    $pdf->MultiCell(180, 3, $conditions_text, 1, 'J');
 
-        $pdf->SetFont('helvetica', 'B', 7);
-        $pdf->SetXY(15, $y_start + 30);
-        $pdf->Cell(0, 3, 'Mantenga la integridad de toda la hoja, sin cortar ninguna de las zonas impresas.', 0, 1, 'C');
+    $pdf->SetFont('helvetica', 'B', 7);
+    $pdf->SetXY(15, $y_start + 30);
+    $pdf->Cell(0, 3, 'Mantenga la integridad de toda la hoja, sin cortar ninguna de las zonas impresas.', 0, 1, 'C');
+    
+    // ✅ AÑADIR IMAGEN DESPUÉS DEL TEXTO
+    $this->add_bottom_image($pdf, $y_start + 35);
+}
+
+private function add_bottom_image($pdf, $y_position)
+{
+    $image_url = 'https://autobusmedinaazahara.com/wp-content/uploads/2025/08/lienzoticket-1.png';
+    
+    try {
+        // Verificar si la imagen existe
+        $image_data = @file_get_contents($image_url);
+        
+        if ($image_data === false) {
+            error_log('❌ No se pudo cargar la imagen desde: ' . $image_url);
+            return;
+        }
+        
+        // Crear archivo temporal
+        $temp_dir = sys_get_temp_dir();
+        $temp_image = $temp_dir . '/lienzoticket_' . uniqid() . '.png';
+        
+        if (file_put_contents($temp_image, $image_data) === false) {
+            error_log('❌ No se pudo crear archivo temporal para la imagen');
+            return;
+        }
+        
+        // Obtener dimensiones de la imagen
+        $image_info = getimagesize($temp_image);
+        if ($image_info === false) {
+            error_log('❌ No se pudieron obtener las dimensiones de la imagen');
+            unlink($temp_image);
+            return;
+        }
+        
+        $original_width = $image_info[0];
+        $original_height = $image_info[1];
+        
+        // Calcular dimensiones para el PDF (ocupar todo el ancho disponible)
+        $pdf_width = 180; // Ancho disponible en el PDF (210mm - 15mm margen izq - 15mm margen der)
+        $pdf_height = ($original_height * $pdf_width) / $original_width;
+        
+        // Verificar que la imagen no se salga de la página
+        $available_height = 297 - $y_position - 10; // Altura A4 - posición actual - margen inferior
+        
+        if ($pdf_height > $available_height) {
+            // Si es muy alta, ajustar proporcionalmente
+            $pdf_height = $available_height;
+            $pdf_width = ($original_width * $pdf_height) / $original_height;
+        }
+        
+        // Centrar la imagen horizontalmente
+        $x_position = 15 + (180 - $pdf_width) / 2;
+        
+        // Insertar imagen en el PDF
+        $pdf->Image($temp_image, $x_position, $y_position, $pdf_width, $pdf_height, 'PNG');
+        
+        // Limpiar archivo temporal
+        unlink($temp_image);
+        
+        error_log('✅ Imagen añadida al PDF correctamente');
+        
+    } catch (Exception $e) {
+        error_log('❌ Error añadiendo imagen al PDF: ' . $e->getMessage());
+        
+        // Limpiar archivo temporal si existe
+        if (isset($temp_image) && file_exists($temp_image)) {
+            unlink($temp_image);
+        }
     }
+}
 
     /**
      * Generar código de barras simple en el pie del billete
      */
 private function generate_simple_barcode($pdf, $y_start)
 {
+    
     // ✅ USAR LOCALIZADOR NUMÉRICO + FECHA (formato YYYYMMDD)
     $fecha_formato = date('Ymd', strtotime($this->reserva_data['fecha']));
     $barcode_data = $this->reserva_data['localizador'] . $fecha_formato;
