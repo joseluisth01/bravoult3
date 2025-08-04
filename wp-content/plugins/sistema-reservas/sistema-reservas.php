@@ -32,6 +32,7 @@ class SistemaReservas
 
     }
 
+    
 
     public function test_pdf_generation()
     {
@@ -225,12 +226,12 @@ class SistemaReservas
         }
     }
 
-    public function add_rewrite_rules()
-    {
-        add_rewrite_rule('^reservas-login/?$', 'index.php?reservas_page=login', 'top');
-        add_rewrite_rule('^reservas-admin/?$', 'index.php?reservas_page=dashboard', 'top');
-        add_rewrite_rule('^reservas-admin/([^/]+)/?$', 'index.php?reservas_page=dashboard&reservas_section=$matches[1]', 'top');
-    }
+    public function add_rewrite_rules() {
+    add_rewrite_rule('^reservas-login/?$', 'index.php?reservas_page=login', 'top');
+    add_rewrite_rule('^reservas-admin/?$', 'index.php?reservas_page=dashboard', 'top');
+    add_rewrite_rule('^reservas-admin/([^/]+)/?$', 'index.php?reservas_page=dashboard&reservas_section=$matches[1]', 'top');
+    add_rewrite_rule('^reservas-change-password/?$', 'index.php?reservas_page=change_password', 'top'); // ✅ NUEVA LÍNEA
+}
 
     public function add_query_vars($vars)
     {
@@ -239,31 +240,38 @@ class SistemaReservas
         return $vars;
     }
 
-    public function template_redirect()
-    {
-        $page = get_query_var('reservas_page');
+public function template_redirect() {
+    $page = get_query_var('reservas_page');
 
-        // Manejar logout
-        if (isset($_GET['logout']) && $_GET['logout'] == '1') {
-            if ($this->dashboard) {
-                $this->dashboard->handle_logout();
-            }
-        }
-
-        if ($page === 'login') {
-            if ($this->dashboard) {
-                $this->dashboard->show_login();
-            }
-            exit;
-        }
-
-        if ($page === 'dashboard') {
-            if ($this->dashboard) {
-                $this->dashboard->show_dashboard();
-            }
-            exit;
+    // Manejar logout
+    if (isset($_GET['logout']) && $_GET['logout'] == '1') {
+        if ($this->dashboard) {
+            $this->dashboard->handle_logout();
         }
     }
+
+    if ($page === 'login') {
+        if ($this->dashboard) {
+            $this->dashboard->show_login();
+        }
+        exit;
+    }
+
+    if ($page === 'dashboard') {
+        if ($this->dashboard) {
+            $this->dashboard->show_dashboard();
+        }
+        exit;
+    }
+
+    // ✅ NUEVO: Manejar página de cambio de contraseña
+    if ($page === 'change_password') {
+        if ($this->dashboard) {
+            $this->dashboard->handle_change_password();
+        }
+        exit;
+    }
+}
 
     public function activate()
     {

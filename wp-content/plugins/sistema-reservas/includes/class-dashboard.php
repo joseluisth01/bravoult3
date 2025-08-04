@@ -95,6 +95,333 @@ class ReservasDashboard
     <?php
     }
 
+    public function handle_change_password() {
+    if (!session_id()) {
+        session_start();
+    }
+    
+    if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'super_admin') {
+        wp_redirect(home_url('/reservas-login/?error=access'));
+        exit;
+    }
+    
+    if ($_POST && isset($_POST['change_password'])) {
+        $this->process_password_change();
+    }
+    
+    $this->render_change_password_page();
+}
+
+private function process_password_change() {
+    $current_password = $_POST['current_password'] ?? '';
+    $new_password = $_POST['new_password'] ?? '';
+    $confirm_password = $_POST['confirm_password'] ?? '';
+    
+    // Validaciones
+    if (empty($current_password) || empty($new_password) || empty($confirm_password)) {
+        wp_redirect(home_url('/reservas-change-password/?error=empty_fields'));
+        exit;
+    }
+    
+    if ($new_password !== $confirm_password) {
+        wp_redirect(home_url('/reservas-change-password/?error=password_mismatch'));
+        exit;
+    }
+    
+    if (strlen($new_password) < 6) {
+        wp_redirect(home_url('/reservas-change-password/?error=password_short'));
+        exit;
+    }
+    
+    // Verificar contraseña actual
+    global $wpdb;
+    $table_users = $wpdb->prefix . 'reservas_users';
+    $user_id = $_SESSION['reservas_user']['id'];
+    
+    $user = $wpdb->get_row($wpdb->prepare(
+        "SELECT password FROM $table_users WHERE id = %d AND role = 'super_admin'",
+        $user_id
+    ));
+    
+    if (!$user || !password_verify($current_password, $user->password)) {
+        wp_redirect(home_url('/reservas-change-password/?error=wrong_current'));
+        exit;
+    }
+    
+    // Actualizar contraseña
+    $result = $wpdb->update(
+        $table_users,
+        array('password' => password_hash($new_password, PASSWORD_DEFAULT)),
+        array('id' => $user_id)
+    );
+    
+    if ($result !== false) {
+        wp_redirect(home_url('/reservas-change-password/?success=1'));
+        exit;
+    } else {
+        wp_redirect(home_url('/reservas-change-password/?error=update_failed'));
+        exit;
+    }
+}
+
+private function render_change_password_page() {
+    ?>
+    <!DOCTYPE html>
+    <html <?php language_attributes(); ?>>
+    <head>
+        <meta charset="<?php bloginfo('charset'); ?>">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Cambiar Contraseña - Sistema de Reservas</title>
+        <link rel="stylesheet" href="<?php echo RESERVAS_PLUGIN_URL; ?>assets/css/admin-style.css">
+    </head>
+    <body>
+        <div class="change-password-container">
+            <div class="change-password-header">
+                <h1>🔐 Cambiar Contraseña</h1>
+                <a href="<?php echo home_url('/reservas-admin/'); ?>" class="btn-back">← Volver al Dashboard</a>
+            </div>
+
+            <?php if (isset($_GET['error'])): ?>
+                <div class="error">
+                    <?php echo $this->get_password_error_message($_GET['error']); ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if (isset($_GET['success'])): ?>
+                <div class="success">
+                    ✅ Contraseña cambiada correctamente. Tu nueva contraseña ya está activa.
+                </div>
+            <?php endif; ?>
+
+            <div class="change-password-form">
+                <form method="post" action="">
+                    <input type="hidden" name="change_password" value="1">
+                    
+                    <div class="form-group">
+                        <label for="current_password">Contraseña Actual *</label>
+                        <input type="password" id="current_password" name="current_password" required 
+                               placeholder="Introduce tu contraseña actual">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="new_password">Nueva Contraseña *</label>
+                        <input type="password" id="new_password" name="new_password" required 
+                               placeholder="Mínimo 6 caracteres" minlength="6">
+                        <small>La nueva contraseña debe tener al menos 6 caracteres</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirm_password">Confirmar Nueva Contraseña *</label>
+                        <input type="password" id="confirm_password" name="confirm_password" required 
+                               placeholder="Repite la nueva contraseña">
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">🔐 Cambiar Contraseña</button>
+                        <a href="<?php echo home_url('/reservas-admin/'); ?>" class="btn-secondary">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="security-info">
+                <h3>⚠️ Información de Seguridad</h3>
+                <ul>
+                    <li>Tu contraseña actual será reemplazada inmediatamente</li>
+                    <li>Deberás usar la nueva contraseña en futuros inicios de sesión</li>
+                    <li>La sesión actual permanecerá activa</li>
+                    <li>Asegúrate de recordar tu nueva contraseña</li>
+                </ul>
+            </div>
+        </div>
+
+        <style>
+        .change-password-container {
+            max-width: 700px;
+            margin: 50px auto;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .change-password-header {
+            background: #0073aa;
+            color: white;
+            padding: 30px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .change-password-header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .btn-back {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .btn-back:hover {
+            background: rgba(255,255,255,0.3);
+            color: white;
+        }
+
+        .change-password-form {
+            background: white;
+            padding: 40px;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #23282d;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #0073aa;
+            box-shadow: 0 0 5px rgba(0, 115, 170, 0.3);
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            font-size: 13px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn-primary {
+            background: #0073aa;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            flex: 1;
+        }
+
+        .btn-primary:hover {
+            background: #005177;
+        }
+
+        .btn-secondary {
+            background: #f0f0f1;
+            color: #2c3338;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            text-decoration: none;
+            text-align: center;
+            font-size: 16px;
+            transition: background 0.3s;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-secondary:hover {
+            background: #dcdcde;
+            color: #2c3338;
+        }
+
+        .security-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .security-info h3 {
+            margin: 0 0 15px 0;
+            color: #856404;
+        }
+
+        .security-info ul {
+            margin: 0;
+            padding-left: 20px;
+            color: #856404;
+        }
+
+        .security-info li {
+            margin-bottom: 8px;
+        }
+
+        .error, .success {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .error {
+            background: #fbeaea;
+            border-left: 4px solid #d63638;
+            color: #d63638;
+        }
+
+        .success {
+            background: #edfaed;
+            border-left: 4px solid #00a32a;
+            color: #00a32a;
+        }
+        </style>
+    </body>
+    </html>
+    <?php
+}
+
+private function get_password_error_message($error) {
+    switch ($error) {
+        case 'empty_fields':
+            return '❌ Todos los campos son obligatorios.';
+        case 'password_mismatch':
+            return '❌ Las contraseñas no coinciden.';
+        case 'password_short':
+            return '❌ La nueva contraseña debe tener al menos 6 caracteres.';
+        case 'wrong_current':
+            return '❌ La contraseña actual es incorrecta.';
+        case 'update_failed':
+            return '❌ Error al actualizar la contraseña. Inténtalo de nuevo.';
+        default:
+            return '❌ Error desconocido.';
+    }
+}
+
     private function render_dashboard_page()
     {
         $user = $_SESSION['reservas_user'];
@@ -221,7 +548,10 @@ class ReservasDashboard
                     <?php if ($is_agency): ?>
                         <span class="agency-name">(<?php echo esc_html($user['agency_name'] ?? 'Agencia'); ?>)</span>
                     <?php endif; ?>
-                    <a href="<?php echo home_url('/reservas-login/?logout=1'); ?>" class="btn-logout">Cerrar Sesión</a>
+                    <?php if ($user['role'] === 'super_admin'): ?>
+    <a href="<?php echo home_url('/reservas-change-password/'); ?>" class="btn-change-password">🔐 Cambiar Contraseña</a>
+<?php endif; ?>
+<a href="<?php echo home_url('/reservas-login/?logout=1'); ?>" class="btn-logout">Cerrar Sesión</a>
                 </div>
             </div>
 
