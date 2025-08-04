@@ -561,7 +561,7 @@ function getModalHTML() {
                                 <label for="descuentoPrioridad">Prioridad cuando no es acumulable:</label>
                                 <select id="descuentoPrioridad" name="descuento_prioridad">
                                     <option value="servicio">Prioridad al descuento del servicio</option>
-                                    <option value="grupo">Prioridad al descuento por grupo</option>
+                                    <option value="grupo">Prioridad al descuento por configuración</option>
                                 </select>
                                 <small style="display: block; margin-top: 5px; color: #666; font-style: italic;">
                                     Cuando no sea acumulable, se aplicará el descuento con mayor prioridad
@@ -4846,7 +4846,7 @@ function renderAgenciesSection(agencies) {
                 <table class="agencies-table">
     <thead>
         <tr>
-            <th>ID</th>
+            <th style="display:none">ID</th>
             <th>Nombre Agencia</th>
             <th>Contacto</th>
             <th>Email</th>
@@ -4958,7 +4958,7 @@ function renderAgenciesSection(agencies) {
         
         .status-active {
             background: #edfaed;
-            color: #00a32a;
+            color: #00a32a !important;
         }
         
         .status-inactive {
@@ -5033,7 +5033,7 @@ function renderAgenciesTableRowsContent(agencies) {
 
     return agencies.map(agency => `
     <tr>
-        <td>${agency.id}</td>
+        <td style="display:none">${agency.id}</td>
         <td><strong>${escapeHtml(agency.agency_name)}</strong></td>
         <td>${escapeHtml(agency.contact_person)}</td>
         <td><a href="mailto:${agency.email}">${escapeHtml(agency.email)}</a></td>
@@ -5123,7 +5123,6 @@ function renderCreateAgencyModal() {
                             <select name="status" id="status" class="status-select">
                                 <option value="active">✅ Activa</option>
                                 <option value="inactive">⏸️ Inactiva</option>
-                                <option value="suspended">⚠️ Suspendida</option>
                             </select>
                         </div>
                     </div>
@@ -5225,7 +5224,6 @@ function renderEditAgencyModal() {
                             <select name="status" id="edit_status" class="status-select">
                                 <option value="active">✅ Activa</option>
                                 <option value="inactive">⏸️ Inactiva</option>
-                                <option value="suspended">⚠️ Suspendida</option>
                             </select>
                         </div>
                     </div>
