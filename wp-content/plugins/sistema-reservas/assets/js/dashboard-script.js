@@ -557,7 +557,7 @@ function getModalHTML() {
                                 </small>
                             </div>
                             
-                            <div class="form-group" id="prioridadGroup" style="display: none; margin-top: 10px;">
+                            <div class="form-group" id="prioridadGroup" style="display:block !important; margin-top: 10px;">
                                 <label for="descuentoPrioridad">Prioridad cuando no es acumulable:</label>
                                 <select id="descuentoPrioridad" name="descuento_prioridad">
                                     <option value="servicio">Prioridad al descuento del servicio</option>
@@ -699,8 +699,8 @@ function getModalHTML() {
                                 </label>
                             </div>
                             
-                            <div class="form-group" id="bulkPrioridadGroup" style="display: none; margin-top: 10px;">
-                                <label for="bulkDescuentoPrioridad">Prioridad cuando no es acumulable:</label>
+                            <div class="form-group" id="bulkPrioridadGroup" style="display:block; margin-top: 10px;">
+                                <label for="bulkDescuentoPrioridad">Prioridad cuando no es acumulablee:</label>
                                 <select id="bulkDescuentoPrioridad" name="bulk_descuento_prioridad">
                                     <option value="servicio">Prioridad al descuento del servicio</option>
                                     <option value="grupo">Prioridad al descuento por grupo</option>
