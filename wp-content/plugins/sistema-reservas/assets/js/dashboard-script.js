@@ -740,6 +740,8 @@ function initModalEvents() {
             if (this.checked) {
                 discountFields.style.display = 'block';
                 updateDiscountPreview();
+                // ✅ INICIALIZAR VISIBILIDAD CUANDO SE ACTIVA
+                setTimeout(initializeDiscountFieldsVisibility, 50);
             } else {
                 discountFields.style.display = 'none';
                 document.getElementById('porcentajeDescuento').value = '';
@@ -794,6 +796,8 @@ function initModalEvents() {
             const bulkDiscountFields = document.getElementById('bulkDiscountFields');
             if (this.checked) {
                 bulkDiscountFields.style.display = 'block';
+                // ✅ INICIALIZAR VISIBILIDAD PARA BULK
+                setTimeout(initializeDiscountFieldsVisibility, 50);
             } else {
                 bulkDiscountFields.style.display = 'none';
                 document.getElementById('bulkPorcentajeDescuento').value = '';
@@ -817,6 +821,52 @@ function initModalEvents() {
             togglePrioridadField('bulkDescuentoAcumulable', 'bulkPrioridadGroup');
         });
     }
+
+    // ✅ INICIALIZAR VISIBILIDAD AL CARGAR MODAL
+    setTimeout(initializeDiscountFieldsVisibility, 100);
+}
+
+function initializeDiscountFieldsVisibility() {
+    console.log('=== INICIALIZANDO VISIBILIDAD DE CAMPOS DE DESCUENTO ===');
+    
+    // Para modal de servicio individual
+    const tieneDescuentoEl = document.getElementById('tieneDescuento');
+    if (tieneDescuentoEl && tieneDescuentoEl.checked) {
+        const discountFields = document.getElementById('discountFields');
+        if (discountFields) {
+            discountFields.style.display = 'block';
+        }
+        
+        // Verificar y mostrar/ocultar campos según valores actuales
+        const tipoDescuentoEl = document.getElementById('tipoDescuento');
+        if (tipoDescuentoEl) {
+            toggleMinimoPersonasField('tipoDescuento', 'minimoPersonasGroup');
+        }
+        
+        const acumulableEl = document.getElementById('descuentoAcumulable');
+        if (acumulableEl) {
+            togglePrioridadField('descuentoAcumulable', 'prioridadGroup');
+        }
+    }
+    
+    // Para modal bulk
+    const bulkTieneDescuentoEl = document.getElementById('bulkTieneDescuento');
+    if (bulkTieneDescuentoEl && bulkTieneDescuentoEl.checked) {
+        const bulkDiscountFields = document.getElementById('bulkDiscountFields');
+        if (bulkDiscountFields) {
+            bulkDiscountFields.style.display = 'block';
+        }
+        
+        const bulkTipoDescuentoEl = document.getElementById('bulkTipoDescuento');
+        if (bulkTipoDescuentoEl) {
+            toggleMinimoPersonasField('bulkTipoDescuento', 'bulkMinimoPersonasGroup');
+        }
+        
+        const bulkAcumulableEl = document.getElementById('bulkDescuentoAcumulable');
+        if (bulkAcumulableEl) {
+            togglePrioridadField('bulkDescuentoAcumulable', 'bulkPrioridadGroup');
+        }
+    }
 }
 
 function togglePrioridadField(checkboxId, groupId) {
@@ -828,11 +878,15 @@ function togglePrioridadField(checkboxId, groupId) {
         return;
     }
 
+    console.log(`togglePrioridadField: checkbox ${checkboxId} está ${checkbox.checked ? 'marcado' : 'desmarcado'}`);
+
     // Si NO es acumulable, mostrar campo de prioridad
     if (!checkbox.checked) {
         group.style.display = 'block';
+        console.log(`Mostrando grupo de prioridad: ${groupId}`);
     } else {
         group.style.display = 'none';
+        console.log(`Ocultando grupo de prioridad: ${groupId}`);
     }
 }
 
@@ -1007,10 +1061,9 @@ function editService(serviceId) {
                 if (precioNino) precioNino.value = service.precio_nino;
                 if (precioResidente) precioResidente.value = service.precio_residente;
 
-                // ✅ CONFIGURAR CAMPO ENABLED
+                // Configurar campo enabled
                 const serviceEnabled = document.getElementById('serviceEnabled');
                 if (serviceEnabled) {
-                    // Si el campo enabled no existe en el servicio, asumir que está habilitado
                     serviceEnabled.checked = service.enabled !== undefined ? service.enabled == '1' : true;
                 }
 
@@ -1066,6 +1119,7 @@ function editService(serviceId) {
                         descuentoPrioridadEl.value = prioridad;
                     }
 
+                    // ✅ CORREGIR: Mostrar/ocultar campo de prioridad según estado de acumulable
                     const prioridadGroup = document.getElementById('prioridadGroup');
                     if (prioridadGroup) {
                         if (!acumulable) {
