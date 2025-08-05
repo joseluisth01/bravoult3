@@ -92,24 +92,24 @@ class ReservasCalendarAdmin
 
             // Organizar por fecha
             $calendar_data = array();
-            foreach ($servicios as $servicio) {
-                if (!isset($calendar_data[$servicio->fecha])) {
-                    $calendar_data[$servicio->fecha] = array();
-                }
+foreach ($servicios as $servicio) {
+    if (!isset($calendar_data[$servicio->fecha])) {
+        $calendar_data[$servicio->fecha] = array();
+    }
 
-                $calendar_data[$servicio->fecha][] = array(
-                    'id' => $servicio->id,
-                    'hora' => substr($servicio->hora, 0, 5),
-                    'plazas_totales' => $servicio->plazas_totales,
-                    'plazas_disponibles' => $servicio->plazas_disponibles,
-                    'precio_adulto' => $servicio->precio_adulto,
-                    'precio_nino' => $servicio->precio_nino,
-                    'precio_residente' => $servicio->precio_residente,
-                    'tiene_descuento' => $servicio->tiene_descuento,
-                    'porcentaje_descuento' => $servicio->porcentaje_descuento,
-                    'enabled' => $servicio->enabled  // ✅ AÑADIR ESTE CAMPO
-                );
-            }
+    $calendar_data[$servicio->fecha][] = array(
+        'id' => $servicio->id,
+        'hora' => substr($servicio->hora, 0, 5),
+        'plazas_totales' => $servicio->plazas_totales,
+        'plazas_disponibles' => $servicio->plazas_disponibles, // ✅ YA ESTÁ
+        'precio_adulto' => $servicio->precio_adulto,
+        'precio_nino' => $servicio->precio_nino,
+        'precio_residente' => $servicio->precio_residente,
+        'tiene_descuento' => $servicio->tiene_descuento,
+        'porcentaje_descuento' => $servicio->porcentaje_descuento,
+        'enabled' => $servicio->enabled
+    );
+}
 
             error_log('✅ Calendar data prepared successfully');
             die(json_encode(['success' => true, 'data' => $calendar_data]));
@@ -164,20 +164,20 @@ class ReservasCalendarAdmin
         }
 
         $dias_anticipacion = ReservasConfigurationAdmin::get_dias_anticipacion_minima();
-    
-    // ✅ CORREGIR CÁLCULO DE FECHA MÍNIMA
-    $fecha_minima = date('Y-m-d');
-    if ($dias_anticipacion > 0) {
-        $fecha_minima = date('Y-m-d', strtotime("+$dias_anticipacion days"));
-    }
 
-    // ✅ CAMBIO AQUÍ: Solo validar si NO es super_admin
-    if ($user['role'] !== 'super_admin') {
-        if ($fecha < $fecha_minima) {
-            wp_send_json_error("No se pueden crear servicios para fechas anteriores a $fecha_minima (mínimo $dias_anticipacion días de anticipación)");
-            return;
+        // ✅ CORREGIR CÁLCULO DE FECHA MÍNIMA
+        $fecha_minima = date('Y-m-d');
+        if ($dias_anticipacion > 0) {
+            $fecha_minima = date('Y-m-d', strtotime("+$dias_anticipacion days"));
         }
-    }
+
+        // ✅ CAMBIO AQUÍ: Solo validar si NO es super_admin
+        if ($user['role'] !== 'super_admin') {
+            if ($fecha < $fecha_minima) {
+                wp_send_json_error("No se pueden crear servicios para fechas anteriores a $fecha_minima (mínimo $dias_anticipacion días de anticipación)");
+                return;
+            }
+        }
 
         if (!in_array($descuento_tipo, ['fijo', 'por_grupo'])) {
             $descuento_tipo = 'fijo';
