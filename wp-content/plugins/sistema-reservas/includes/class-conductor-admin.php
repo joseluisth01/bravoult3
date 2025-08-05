@@ -1,6 +1,6 @@
 <?php
 /**
- * Clase completa para gestión de conductores
+ * Clase completa para gestión de conductores - COMPLETADA
  * Archivo: wp-content/plugins/sistema-reservas/includes/class-conductor-admin.php
  */
 
@@ -12,6 +12,61 @@ class ReservasConductorAdmin {
         add_action('wp_ajax_get_service_reservations', array($this, 'get_service_reservations'));
         add_action('wp_ajax_verify_reservation', array($this, 'verify_reservation'));
         add_action('wp_ajax_get_reservations_summary', array($this, 'get_reservations_summary'));
+        
+        // ✅ CREAR USUARIO CONDUCTOR AL INICIALIZAR
+        add_action('init', array($this, 'ensure_conductor_user_exists'));
+    }
+    
+    /**
+     * ✅ NUEVA FUNCIÓN: Asegurar que existe el usuario conductor
+     */
+    public function ensure_conductor_user_exists() {
+        // Solo ejecutar una vez por día para no sobrecargar
+        if (wp_doing_ajax() || wp_doing_cron()) {
+            return;
+        }
+        
+        $last_check = get_option('reservas_conductor_check', 0);
+        if (time() - $last_check < DAY_IN_SECONDS) {
+            return;
+        }
+        
+        update_option('reservas_conductor_check', time());
+        
+        global $wpdb;
+        $table_users = $wpdb->prefix . 'reservas_users';
+        
+        // Verificar si ya existe
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $table_users WHERE username = %s",
+            'conductor'
+        ));
+        
+        if ($existing == 0) {
+            $result = $wpdb->insert(
+                $table_users,
+                array(
+                    'username' => 'conductor',
+                    'email' => 'conductor@' . parse_url(home_url(), PHP_URL_HOST),
+                    'password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT),
+                    'role' => 'conductor',
+                    'status' => 'active',
+                    'created_at' => current_time('mysql')
+                )
+            );
+            
+            if ($result) {
+                error_log('✅ Usuario conductor creado: conductor / conductorbusmedina');
+            }
+        } else {
+            // Actualizar contraseña si ya existe
+            $wpdb->update(
+                $table_users,
+                array('password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT)),
+                array('username' => 'conductor', 'role' => 'conductor')
+            );
+            error_log('✅ Contraseña de conductor actualizada: conductor / conductorbusmedina');
+        }
     }
     
     /**
@@ -52,7 +107,7 @@ class ReservasConductorAdmin {
         $first_day = sprintf('%04d-%02d-01', $year, $month);
         $last_day = date('Y-m-t', strtotime($first_day));
         
-        // ✅ CONSULTA MEJORADA - Solo servicios activos y habilitados
+        // ✅ CONSULTA MEJORADA - Todos los servicios (activos y habilitados)
         $servicios = $wpdb->get_results($wpdb->prepare(
             "SELECT s.id, s.fecha, s.hora, s.hora_vuelta, s.plazas_totales, s.enabled,
                     COUNT(r.id) as total_reservas,
@@ -63,7 +118,6 @@ class ReservasConductorAdmin {
              WHERE s.fecha BETWEEN %s AND %s 
              AND s.status = 'active'
              AND s.enabled = 1
-             AND s.fecha >= CURDATE()
              GROUP BY s.id
              ORDER BY s.fecha, s.hora",
             $first_day,
@@ -264,15 +318,14 @@ class ReservasConductorAdmin {
             return;
         }
         
-        // ✅ MEJORADO: Registrar la verificación con timestamp
+        // ✅ REGISTRAR LA VERIFICACIÓN CON TIMESTAMP
         $action = $verified ? 'verificada' : 'desmarcada';
         $timestamp = current_time('mysql');
         
         error_log("Conductor {$user['username']} ha $action la reserva {$reserva->localizador} a las $timestamp");
         
-        // ✅ OPCIONAL: Guardar verificación en la base de datos
-        // Puedes añadir un campo "verificado_por_conductor" y "fecha_verificacion" a la tabla
-        // Por ahora solo hacemos log
+        // ✅ OPCIONAL: Guardar verificación en meta o tabla adicional
+        // Por simplicidad, solo registramos en log por ahora
         
         wp_send_json_success(array(
             'message' => "Reserva {$reserva->localizador} $action correctamente",
@@ -367,9 +420,9 @@ class ReservasConductorAdmin {
     }
     
     /**
-     * ✅ FUNCIÓN MEJORADA: Crear usuario conductor de prueba
+     * ✅ FUNCIÓN ESTÁTICA PARA CREAR USUARIO CONDUCTOR
      */
-    public static function create_test_conductor() {
+    public static function create_conductor_user() {
         global $wpdb;
         $table_users = $wpdb->prefix . 'reservas_users';
         
@@ -385,7 +438,7 @@ class ReservasConductorAdmin {
                 array(
                     'username' => 'conductor',
                     'email' => 'conductor@' . parse_url(home_url(), PHP_URL_HOST),
-                    'password' => password_hash('conductor123', PASSWORD_DEFAULT),
+                    'password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT),
                     'role' => 'conductor',
                     'status' => 'active',
                     'created_at' => current_time('mysql')
@@ -393,70 +446,20 @@ class ReservasConductorAdmin {
             );
             
             if ($result) {
-                error_log('✅ Usuario conductor creado: conductor / conductor123');
+                error_log('✅ Usuario conductor creado: conductor / conductorbusmedina');
                 return true;
             }
         } else {
             // Actualizar contraseña si ya existe
             $wpdb->update(
                 $table_users,
-                array('password' => password_hash('conductor123', PASSWORD_DEFAULT)),
+                array('password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT)),
                 array('username' => 'conductor', 'role' => 'conductor')
             );
-            error_log('✅ Contraseña de conductor actualizada: conductor / conductor123');
+            error_log('✅ Contraseña de conductor actualizada: conductor / conductorbusmedina');
             return true;
         }
         
         return false;
-    }
-    
-    
-    /**
-     * ✅ NUEVA FUNCIÓN: Crear múltiples usuarios conductores
-     */
-    public static function create_multiple_conductors($count = 3) {
-        global $wpdb;
-        $table_users = $wpdb->prefix . 'reservas_users';
-        $created = 0;
-        
-        for ($i = 1; $i <= $count; $i++) {
-            $username = "conductor{$i}";
-            $email = "conductor{$i}@" . parse_url(home_url(), PHP_URL_HOST);
-            
-            // Verificar si ya existe
-            $existing = $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM $table_users WHERE username = %s",
-                $username
-            ));
-            
-            if ($existing == 0) {
-                $result = $wpdb->insert(
-                    $table_users,
-                    array(
-                        'username' => $username,
-                        'email' => $email,
-                        'password' => password_hash('conductor123', PASSWORD_DEFAULT),
-                        'role' => 'conductor',
-                        'status' => 'active',
-                        'created_at' => current_time('mysql')
-                    )
-                );
-                
-                if ($result) {
-                    $created++;
-                    error_log("✅ Usuario conductor{$i} creado: {$username} / conductor123");
-                }
-            } else {
-                // Actualizar contraseña si ya existe
-                $wpdb->update(
-                    $table_users,
-                    array('password' => password_hash('conductor123', PASSWORD_DEFAULT)),
-                    array('username' => $username, 'role' => 'conductor')
-                );
-                error_log("✅ Contraseña de conductor{$i} actualizada: {$username} / conductor123");
-            }
-        }
-        
-        return $created;
     }
 }

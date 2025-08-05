@@ -439,7 +439,7 @@ private function generate_conditions_section($pdf)
 
 private function add_bottom_image($pdf, $y_position)
 {
-    $image_url = 'https://autobusmedinaazahara.com/wp-content/uploads/2025/08/lienzoticket-1.png';
+    $image_url = 'https://autobusmedinaazahara.com/wp-content/uploads/2025/08/Vector-10-1.png';
     
     try {
         // Verificar si la imagen existe

@@ -436,6 +436,7 @@ class ReservasDashboard
         $is_agency = ($user['role'] === 'agencia');
         $is_super_admin = ($user['role'] === 'super_admin');
         $is_admin = in_array($user['role'], ['super_admin', 'admin']);
+        $is_conductor = ($user['role'] === 'conductor');
     ?>
         <!DOCTYPE html>
         <html <?php language_attributes(); ?>>
@@ -447,13 +448,15 @@ class ReservasDashboard
             <link rel="stylesheet" href="<?php echo RESERVAS_PLUGIN_URL; ?>assets/css/admin-style.css">
             <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
             <script src="<?php echo RESERVAS_PLUGIN_URL; ?>assets/js/dashboard-script.js"></script>
+            <?php if ($is_conductor): ?>
+            <script src="<?php echo RESERVAS_PLUGIN_URL; ?>assets/js/conductor-dashboard-script.js"></script>
+            <?php endif; ?>
             <script>
                 const reservasAjax = {
                     ajax_url: '<?php echo admin_url('admin-ajax.php'); ?>',
                     nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
                 };
 
-                // ✅ AÑADIR INFORMACIÓN DEL USUARIO ACTUAL
                 window.reservasUser = {
                     role: '<?php echo esc_js($user['role']); ?>',
                     username: '<?php echo esc_js($user['username']); ?>',
@@ -544,6 +547,82 @@ class ReservasDashboard
                     color: #666;
                     font-size: 14px;
                 }
+
+                .conductor-welcome {
+                    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                    color: white;
+                    padding: 30px;
+                    border-radius: 8px;
+                    margin-bottom: 30px;
+                    text-align: center;
+                }
+
+                .conductor-welcome h2 {
+                    margin: 0 0 10px 0;
+                    font-size: 28px;
+                }
+
+                .conductor-welcome p {
+                    margin: 0;
+                    font-size: 16px;
+                    opacity: 0.9;
+                }
+
+                .conductor-main-action {
+                    text-align: center;
+                    margin: 40px 0;
+                }
+
+                .conductor-main-btn {
+                    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+                    color: white;
+                    border: none;
+                    padding: 20px 40px;
+                    font-size: 20px;
+                    font-weight: bold;
+                    border-radius: 10px;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+                    min-width: 300px;
+                }
+
+                .conductor-main-btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+                }
+
+                .conductor-info-cards {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 20px;
+                    margin-top: 30px;
+                }
+
+                .conductor-info-card {
+                    background: white;
+                    padding: 25px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                    border-left: 4px solid #28a745;
+                }
+
+                .conductor-info-card h3 {
+                    margin: 0 0 15px 0;
+                    color: #28a745;
+                    font-size: 18px;
+                }
+
+                .conductor-info-card p {
+                    margin: 5px 0;
+                    color: #555;
+                    line-height: 1.5;
+                }
+
+                /* ✅ CONTENEDOR DINÁMICO PARA CONDUCTOR */
+                #conductor-dynamic-content {
+                    display: none;
+                }
             </style>
         </head>
 
@@ -565,10 +644,10 @@ class ReservasDashboard
 
             <div class="dashboard-content">
                 <?php if ($is_conductor): ?>
-                <!-- ✅ NUEVO: Dashboard para Conductores -->
+                <!-- ✅ DASHBOARD COMPLETO PARA CONDUCTORES -->
                 <div class="conductor-welcome">
-                    <h2>👨‍✈️ Bienvenido Conductor <?php echo esc_html($user['username']); ?>!</h2>
-                    <p>Panel de control para conductores - Consulta los servicios y las reservas</p>
+                    <h2>👨‍✈️ Bienvenido Conductor!</h2>
+                    <p>Panel de control para conductores - Consulta los servicios y las reservas de los pasajeros</p>
                 </div>
 
                 <div class="conductor-main-action">
@@ -581,7 +660,7 @@ class ReservasDashboard
                     <div class="conductor-info-card">
                         <h3>📋 Tu función</h3>
                         <p>• Consultar servicios programados</p>
-                        <p>• Ver lista de pasajeros por servicio</p>
+                        <p>• Ver lista completa de pasajeros por servicio</p>
                         <p>• Verificar datos de las reservas</p>
                         <p>• Confirmar embarque de pasajeros</p>
                     </div>
@@ -597,10 +676,10 @@ class ReservasDashboard
                         <p>1. Haz clic en "Ver Servicios y Reservas"</p>
                         <p>2. Selecciona el día en el calendario</p>
                         <p>3. Haz clic en el servicio que te interese</p>
-                        <p>4. Revisa la lista de pasajeros</p>
+                        <p>4. Revisa la lista completa de pasajeros</p>
                     </div>
                 </div>
-                
+
                 <?php elseif ($is_agency): ?>
                     <!-- Dashboard para Agencias -->
                     <div class="agency-welcome">
@@ -697,6 +776,11 @@ class ReservasDashboard
                 <?php endif; ?>
 
             </div>
+            <?php if ($is_conductor): ?>
+            <div id="conductor-dynamic-content">
+                <!-- El contenido del calendario se cargará aquí -->
+            </div>
+            <?php endif; ?>
         </body>
 
         </html>

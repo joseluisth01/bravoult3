@@ -21,6 +21,7 @@ class SistemaReservas
     private $configuration_admin;
     private $reports_admin;
     private $agencies_admin;
+    private $conductor_admin;
 
     public function __construct()
     {
@@ -147,7 +148,8 @@ class SistemaReservas
             'includes/class-email-service.php',
             'includes/class-frontend.php',
             'includes/class-reserva-rapida-admin.php',
-            'includes/class-redsys-handler.php', // ✅ CARGAR ESTE ARCHIVO
+            'includes/class-redsys-handler.php',
+            'includes/class-conductor-admin.php',
         );
 
         foreach ($files as $file) {
@@ -224,6 +226,10 @@ class SistemaReservas
         if (class_exists('ReservasReservaRapidaAdmin')) {
             new ReservasReservaRapidaAdmin();
         }
+
+        if (class_exists('ReservasConductorAdmin')) {
+            $this->conductor_admin = new ReservasConductorAdmin();
+        }
     }
 
     public function add_rewrite_rules() {
@@ -283,6 +289,9 @@ public function template_redirect() {
 
         $this->init_localizador_counter();
 
+        // ✅ CREAR USUARIO CONDUCTOR AL ACTIVAR
+        $this->create_conductor_user();
+
         // Flush rewrite rules para activar las nuevas URLs
         flush_rewrite_rules();
 
@@ -296,6 +305,44 @@ public function template_redirect() {
             $next_year = mktime(0, 0, 0, 1, 1, date('Y') + 1); // 1 de enero del próximo año
             wp_schedule_event($next_year, 'yearly', 'reservas_reset_localizadores');
             error_log('✅ Programado reinicio anual de localizadores para: ' . date('Y-m-d H:i:s', $next_year));
+        }
+    }
+
+    private function create_conductor_user()
+    {
+        global $wpdb;
+        $table_users = $wpdb->prefix . 'reservas_users';
+        
+        // Verificar si ya existe
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $table_users WHERE username = %s",
+            'conductor'
+        ));
+        
+        if ($existing == 0) {
+            $result = $wpdb->insert(
+                $table_users,
+                array(
+                    'username' => 'conductor',
+                    'email' => 'conductor@' . parse_url(home_url(), PHP_URL_HOST),
+                    'password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT),
+                    'role' => 'conductor',
+                    'status' => 'active',
+                    'created_at' => current_time('mysql')
+                )
+            );
+            
+            if ($result) {
+                error_log('✅ Usuario conductor creado: conductor / conductorbusmedina');
+            }
+        } else {
+            // Actualizar contraseña si ya existe
+            $wpdb->update(
+                $table_users,
+                array('password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT)),
+                array('username' => 'conductor', 'role' => 'conductor')
+            );
+            error_log('✅ Contraseña de conductor actualizada: conductor / conductorbusmedina');
         }
     }
 
@@ -1985,6 +2032,124 @@ function debug_reservas_recientes()
         'total' => count($reservas),
         'reservas' => $reservas
     ));
+}
+
+
+// ✅ FUNCIÓN MANUAL PARA CREAR USUARIO CONDUCTOR (añadir al final de sistema-reservas.php)
+
+add_action('wp_ajax_create_conductor_user_manual', 'create_conductor_user_manual');
+add_action('wp_ajax_nopriv_create_conductor_user_manual', 'create_conductor_user_manual');
+
+function create_conductor_user_manual() {
+    // Solo permitir en desarrollo o con permisos de administrador
+    if (!current_user_can('administrator') && !isset($_GET['force'])) {
+        wp_die('No tienes permisos para esta acción');
+    }
+    
+    global $wpdb;
+    $table_users = $wpdb->prefix . 'reservas_users';
+    
+    // Verificar si ya existe
+    $existing = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $table_users WHERE username = %s",
+        'conductor'
+    ));
+    
+    if ($existing == 0) {
+        $result = $wpdb->insert(
+            $table_users,
+            array(
+                'username' => 'conductor',
+                'email' => 'conductor@' . parse_url(home_url(), PHP_URL_HOST),
+                'password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT),
+                'role' => 'conductor',
+                'status' => 'active',
+                'created_at' => current_time('mysql')
+            )
+        );
+        
+        if ($result) {
+            echo '✅ Usuario conductor creado exitosamente<br>';
+            echo '<strong>Usuario:</strong> conductor<br>';
+            echo '<strong>Contraseña:</strong> conductorbusmedina<br>';
+            echo '<a href="' . home_url('/reservas-login/') . '">Ir al login</a>';
+        } else {
+            echo '❌ Error creando el usuario: ' . $wpdb->last_error;
+        }
+    } else {
+        // Actualizar contraseña si ya existe
+        $result = $wpdb->update(
+            $table_users,
+            array('password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT)),
+            array('username' => 'conductor', 'role' => 'conductor')
+        );
+        
+        if ($result !== false) {
+            echo '✅ Usuario conductor ya existía, contraseña actualizada<br>';
+            echo '<strong>Usuario:</strong> conductor<br>';
+            echo '<strong>Contraseña:</strong> conductorbusmedina<br>';
+            echo '<a href="' . home_url('/reservas-login/') . '">Ir al login</a>';
+        } else {
+            echo '❌ Error actualizando la contraseña: ' . $wpdb->last_error;
+        }
+    }
+}
+
+// ✅ FUNCIÓN PARA VERIFICAR QUE EL CONDUCTOR PUEDE INICIAR SESIÓN
+add_action('wp_ajax_test_conductor_login', 'test_conductor_login');
+add_action('wp_ajax_nopriv_test_conductor_login', 'test_conductor_login');
+
+function test_conductor_login() {
+    global $wpdb;
+    $table_users = $wpdb->prefix . 'reservas_users';
+    
+    $user = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_users WHERE username = %s AND role = 'conductor'",
+        'conductor'
+    ));
+    
+    if ($user) {
+        echo '✅ Usuario conductor encontrado en la base de datos<br>';
+        echo '<strong>ID:</strong> ' . $user->id . '<br>';
+        echo '<strong>Username:</strong> ' . $user->username . '<br>';
+        echo '<strong>Email:</strong> ' . $user->email . '<br>';
+        echo '<strong>Role:</strong> ' . $user->role . '<br>';
+        echo '<strong>Status:</strong> ' . $user->status . '<br>';
+        echo '<strong>Creado:</strong> ' . $user->created_at . '<br>';
+        
+        // Verificar contraseña
+        $password_check = password_verify('conductorbusmedina', $user->password);
+        echo '<strong>Contraseña verificada:</strong> ' . ($password_check ? '✅ Correcta' : '❌ Incorrecta') . '<br>';
+        
+        echo '<br><a href="' . home_url('/reservas-login/') . '">Probar login manual</a>';
+    } else {
+        echo '❌ Usuario conductor no encontrado en la base de datos<br>';
+        echo '<a href="' . admin_url('admin-ajax.php?action=create_conductor_user_manual&force=1') . '">Crear usuario conductor</a>';
+    }
+}
+
+add_action('wp_ajax_update_conductor_password', 'update_conductor_password');
+add_action('wp_ajax_nopriv_update_conductor_password', 'update_conductor_password');
+
+function update_conductor_password() {
+    global $wpdb;
+    $table_users = $wpdb->prefix . 'reservas_users';
+    
+    // Actualizar contraseña del conductor
+    $result = $wpdb->update(
+        $table_users,
+        array('password' => password_hash('conductor', PASSWORD_DEFAULT)),
+        array('username' => 'conductor', 'role' => 'conductor')
+    );
+    
+    if ($result !== false) {
+        echo '✅ Contraseña del conductor actualizada correctamente<br>';
+        echo '<strong>Usuario:</strong> conductor<br>';
+        echo '<strong>Nueva contraseña:</strong> conductor<br>';
+        echo '<a href="' . home_url('/reservas-login/') . '">Probar login</a>';
+    } else {
+        echo '❌ Error actualizando la contraseña: ' . $wpdb->last_error;
+    }
 }
 
 // Inicializar el plugin

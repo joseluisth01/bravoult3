@@ -663,7 +663,6 @@ function renderServiceReservations(data) {
                         <th>Desglose</th>
                         <th>Origen</th>
                         <th>Estado</th>
-                        <th>Verificar</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -690,11 +689,6 @@ function renderServiceReservations(data) {
                     <td>${desglose.join(', ')}</td>
                     <td><span class="origin-badge ${originClass}">${origen}</span></td>
                     <td><span class="status-badge status-${reserva.estado}">${reserva.estado}</span></td>
-                    <td>
-                        <button class="verify-btn not-verified" onclick="toggleReservationVerification(${reserva.id}, this)">
-                            Verificar
-                        </button>
-                    </td>
                 </tr>
             `;
         });

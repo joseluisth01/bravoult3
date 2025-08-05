@@ -7947,12 +7947,8 @@ function initAgencyReservaRapida() {
         </div>
     </div>
     
-    <div class="admin-pricing-summary">
-        <div class="admin-total-row">
-            <span>Total:</span>
-            <span id="agency-total-price">0€</span>
-        </div>
-    </div>
+
+
 </div>
                 
                 <!-- Paso 3: Datos del cliente (CON EMAIL OPCIONAL) -->
@@ -8004,9 +8000,6 @@ function initAgencyReservaRapida() {
                         </div>
                         <div class="admin-confirm-row">
                             <strong>Email:</strong> <span id="agency-confirm-email"></span>
-                        </div>
-                        <div class="admin-confirm-row">
-                            <strong>Total:</strong> <span id="agency-confirm-total"></span>
                         </div>
                     </div>
                 </div>
@@ -10622,3 +10615,32 @@ window.downloadAgencyTicketPDF = downloadAgencyTicketPDF;
 window.showAgencyCancelReservationModal = showAgencyCancelReservationModal;
 window.closeAgencyCancelReservationModal = closeAgencyCancelReservationModal;
 window.closeAgencyReservationDetailsModal = closeAgencyReservationDetailsModal;
+
+/**
+ * Función de enlace para cargar el calendario del conductor
+ * Esta función verifica si el archivo específico del conductor está cargado
+ */
+function loadConductorCalendarSection() {
+    console.log('=== INICIANDO CALENDARIO CONDUCTOR ===');
+    
+    // Verificar si las funciones del conductor están disponibles
+    if (typeof conductorCurrentDate !== 'undefined') {
+        // El archivo conductor-dashboard-script.js ya está cargado
+        console.log('✅ Archivo conductor-dashboard-script.js detectado');
+        // La función ya está definida en el archivo específico del conductor
+        return;
+    } else {
+        console.log('❌ Archivo conductor-dashboard-script.js no cargado, iniciando manualmente...');
+        
+        // Fallback: cargar manualmente si el archivo no se cargó
+        initConductorFallback();
+    }
+}
+
+/**
+ * Función de respaldo si el archivo del conductor no se carga
+ */
+function initConductorFallback() {
+    alert('El sistema del conductor no se ha cargado correctamente. Por favor, recarga la página.');
+    console.error('El archivo conductor-dashboard-script.js no se cargó correctamente');
+}
