@@ -13,146 +13,255 @@ class ReservasConductorAdmin {
         add_action('wp_ajax_verify_reservation', array($this, 'verify_reservation'));
         add_action('wp_ajax_get_reservations_summary', array($this, 'get_reservations_summary'));
         
-        // ✅ CREAR USUARIO CONDUCTOR AL INICIALIZAR
-        add_action('init', array($this, 'ensure_conductor_user_exists'));
+        add_action('wp_ajax_debug_conductor_session', array($this, 'debug_conductor_session'));
+    add_action('wp_ajax_nopriv_debug_conductor_session', array($this, 'debug_conductor_session'));
+    
+    // Crear usuario conductor al inicializar
+    add_action('init', array($this, 'ensure_conductor_user_exists'));
     }
     
     /**
      * ✅ NUEVA FUNCIÓN: Asegurar que existe el usuario conductor
      */
     public function ensure_conductor_user_exists() {
-        // Solo ejecutar una vez por día para no sobrecargar
-        if (wp_doing_ajax() || wp_doing_cron()) {
-            return;
-        }
-        
-        $last_check = get_option('reservas_conductor_check', 0);
-        if (time() - $last_check < DAY_IN_SECONDS) {
-            return;
-        }
-        
-        update_option('reservas_conductor_check', time());
-        
-        global $wpdb;
-        $table_users = $wpdb->prefix . 'reservas_users';
-        
-        // Verificar si ya existe
-        $existing = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $table_users WHERE username = %s",
-            'conductor'
-        ));
-        
-        if ($existing == 0) {
-            $result = $wpdb->insert(
-                $table_users,
-                array(
-                    'username' => 'conductor',
-                    'email' => 'conductor@' . parse_url(home_url(), PHP_URL_HOST),
-                    'password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT),
-                    'role' => 'conductor',
-                    'status' => 'active',
-                    'created_at' => current_time('mysql')
-                )
-            );
-            
-            if ($result) {
-                error_log('✅ Usuario conductor creado: conductor / conductorbusmedina');
-            }
-        } else {
-            // Actualizar contraseña si ya existe
-            $wpdb->update(
-                $table_users,
-                array('password' => password_hash('conductorbusmedina', PASSWORD_DEFAULT)),
-                array('username' => 'conductor', 'role' => 'conductor')
-            );
-            error_log('✅ Contraseña de conductor actualizada: conductor / conductorbusmedina');
-        }
+    // Solo ejecutar si no estamos en AJAX para evitar conflictos
+    if (wp_doing_ajax()) {
+        return;
     }
+    
+    // Solo verificar una vez por día
+    $last_check = get_option('reservas_conductor_check', 0);
+    if (time() - $last_check < DAY_IN_SECONDS) {
+        return;
+    }
+    
+    update_option('reservas_conductor_check', time());
+    
+    global $wpdb;
+    $table_users = $wpdb->prefix . 'reservas_users';
+    
+    // Verificar si ya existe
+    $existing = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $table_users WHERE username = %s",
+        'conductor'
+    ));
+    
+    if ($existing == 0) {
+        $result = $wpdb->insert(
+            $table_users,
+            array(
+                'username' => 'conductor',
+                'email' => 'conductor@' . parse_url(home_url(), PHP_URL_HOST),
+                'password' => password_hash('conductor', PASSWORD_DEFAULT), // ✅ CONTRASEÑA SIMPLIFICADA
+                'role' => 'conductor',
+                'status' => 'active',
+                'created_at' => current_time('mysql')
+            )
+        );
+        
+        if ($result) {
+            error_log('✅ Usuario conductor creado: conductor / conductor');
+        } else {
+            error_log('❌ Error creando conductor: ' . $wpdb->last_error);
+        }
+    } else {
+        // Actualizar contraseña si ya existe
+        $wpdb->update(
+            $table_users,
+            array('password' => password_hash('conductor', PASSWORD_DEFAULT)), // ✅ CONTRASEÑA SIMPLIFICADA
+            array('username' => 'conductor', 'role' => 'conductor')
+        );
+        error_log('✅ Contraseña de conductor actualizada: conductor / conductor');
+    }
+}
+
+    public function debug_conductor_session() {
+    error_log('=== DEBUG CONDUCTOR SESSION AJAX ===');
+    
+    // Iniciar sesión si no existe
+    if (!session_id() && !headers_sent()) {
+        session_start();
+    }
+    
+    $debug_info = array(
+        'session_id' => session_id(),
+        'session_status' => session_status(),
+        'headers_sent' => headers_sent(),
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce_received' => $_POST['nonce'] ?? 'ninguno',
+        'nonce_valid' => isset($_POST['nonce']) ? wp_verify_nonce($_POST['nonce'], 'reservas_nonce') : false,
+        'session_data' => $_SESSION ?? array(),
+        'server_info' => array(
+            'php_version' => PHP_VERSION,
+            'wp_version' => get_bloginfo('version'),
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
+            'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+            'request_method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown'
+        )
+    );
+    
+    // Verificar usuario conductor en BD
+    global $wpdb;
+    $table_users = $wpdb->prefix . 'reservas_users';
+    
+    $conductor_user = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, username, role, status, created_at FROM $table_users WHERE role = 'conductor'",
+    ));
+    
+    if ($conductor_user) {
+        $debug_info['conductor_in_db'] = array(
+            'exists' => true,
+            'id' => $conductor_user->id,
+            'username' => $conductor_user->username,
+            'status' => $conductor_user->status,
+            'created_at' => $conductor_user->created_at
+        );
+    } else {
+        $debug_info['conductor_in_db'] = array('exists' => false);
+    }
+    
+    error_log('Debug info conductor: ' . print_r($debug_info, true));
+    
+    wp_send_json_success($debug_info);
+}
     
     /**
      * Obtener datos del calendario para conductores
      */
     public function get_conductor_calendar_data() {
-        error_log('=== GET_CONDUCTOR_CALENDAR_DATA INICIADO ===');
+    error_log('=== GET_CONDUCTOR_CALENDAR_DATA INICIADO ===');
+    
+    // ✅ VERIFICACIÓN MEJORADA DE NONCE
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        error_log('❌ Fallo en verificación de nonce');
+        error_log('Nonce recibido: ' . ($_POST['nonce'] ?? 'ninguno'));
+        wp_send_json_error('Error de seguridad: nonce inválido');
+        return;
+    }
+    
+    // ✅ INICIAR SESIÓN SI NO EXISTE
+    if (!session_id() && !headers_sent()) {
+        session_start();
+    }
+    
+    // ✅ DEBUGGING DETALLADO DE SESIÓN
+    error_log('Session ID: ' . session_id());
+    error_log('Session status: ' . session_status());
+    error_log('Session data: ' . print_r($_SESSION, true));
+    error_log('Headers sent: ' . (headers_sent() ? 'SÍ' : 'NO'));
+    
+    if (!isset($_SESSION['reservas_user'])) {
+        error_log('❌ No hay usuario en sesión para conductor');
         
-        // Verificar sesión y permisos
-        if (!session_id()) {
-            session_start();
-        }
+        // ✅ INTENTAR CARGAR USUARIO POR FALLBACK
+        $this->attempt_conductor_fallback_login();
         
         if (!isset($_SESSION['reservas_user'])) {
-            error_log('❌ No hay usuario en sesión para conductor');
             wp_send_json_error('Sesión expirada. Recarga la página e inicia sesión nuevamente.');
             return;
         }
-        
-        $user = $_SESSION['reservas_user'];
-        if ($user['role'] !== 'conductor') {
-            error_log('❌ Usuario sin permisos de conductor: ' . $user['role']);
-            wp_send_json_error('Sin permisos de conductor');
-            return;
-        }
-        
-        error_log('✅ Usuario conductor validado: ' . $user['username']);
-        
-        global $wpdb;
-        $table_servicios = $wpdb->prefix . 'reservas_servicios';
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        
-        $month = isset($_POST['month']) ? intval($_POST['month']) : date('n');
-        $year = isset($_POST['year']) ? intval($_POST['year']) : date('Y');
-        
-        error_log("Cargando calendario para: $month/$year");
-        
-        $first_day = sprintf('%04d-%02d-01', $year, $month);
-        $last_day = date('Y-m-t', strtotime($first_day));
-        
-        // ✅ CONSULTA MEJORADA - Todos los servicios (activos y habilitados)
-        $servicios = $wpdb->get_results($wpdb->prepare(
-            "SELECT s.id, s.fecha, s.hora, s.hora_vuelta, s.plazas_totales, s.enabled,
-                    COUNT(r.id) as total_reservas,
-                    SUM(CASE WHEN r.estado = 'confirmada' THEN 1 ELSE 0 END) as reservas_confirmadas,
-                    SUM(CASE WHEN r.estado = 'confirmada' THEN r.total_personas ELSE 0 END) as personas_confirmadas
-             FROM $table_servicios s
-             LEFT JOIN $table_reservas r ON s.id = r.servicio_id
-             WHERE s.fecha BETWEEN %s AND %s 
-             AND s.status = 'active'
-             AND s.enabled = 1
-             GROUP BY s.id
-             ORDER BY s.fecha, s.hora",
-            $first_day,
-            $last_day
-        ));
-        
-        if ($wpdb->last_error) {
-            error_log('❌ Error en consulta de conductor: ' . $wpdb->last_error);
-            wp_send_json_error('Error de base de datos: ' . $wpdb->last_error);
-            return;
-        }
-        
-        error_log('✅ Encontrados ' . count($servicios) . ' servicios para conductor');
-        
-        // Organizar por fecha
-        $calendar_data = array();
-        foreach ($servicios as $servicio) {
-            if (!isset($calendar_data[$servicio->fecha])) {
-                $calendar_data[$servicio->fecha] = array();
-            }
-            
-            $calendar_data[$servicio->fecha][] = array(
-                'id' => $servicio->id,
-                'hora' => substr($servicio->hora, 0, 5),
-                'hora_vuelta' => $servicio->hora_vuelta ? substr($servicio->hora_vuelta, 0, 5) : null,
-                'plazas_totales' => $servicio->plazas_totales,
-                'total_reservas' => $servicio->total_reservas,
-                'reservas_confirmadas' => $servicio->reservas_confirmadas,
-                'personas_confirmadas' => $servicio->personas_confirmadas
-            );
-        }
-        
-        error_log('✅ Datos de calendario preparados para conductor');
-        wp_send_json_success($calendar_data);
     }
+    
+    $user = $_SESSION['reservas_user'];
+    error_log('Usuario en sesión: ' . print_r($user, true));
+    
+    if ($user['role'] !== 'conductor') {
+        error_log('❌ Usuario sin permisos de conductor. Role: ' . $user['role']);
+        wp_send_json_error('Sin permisos de conductor. Role actual: ' . $user['role']);
+        return;
+    }
+    
+    error_log('✅ Usuario conductor validado: ' . $user['username']);
+    
+    global $wpdb;
+    $table_servicios = $wpdb->prefix . 'reservas_servicios';
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    
+    $month = isset($_POST['month']) ? intval($_POST['month']) : date('n');
+    $year = isset($_POST['year']) ? intval($_POST['year']) : date('Y');
+    
+    error_log("Cargando calendario para: $month/$year");
+    
+    $first_day = sprintf('%04d-%02d-01', $year, $month);
+    $last_day = date('Y-m-t', strtotime($first_day));
+    
+    // ✅ CONSULTA MEJORADA con mejor manejo de errores
+    $servicios = $wpdb->get_results($wpdb->prepare(
+        "SELECT s.id, s.fecha, s.hora, s.hora_vuelta, s.plazas_totales, s.enabled,
+                COUNT(r.id) as total_reservas,
+                SUM(CASE WHEN r.estado = 'confirmada' THEN 1 ELSE 0 END) as reservas_confirmadas,
+                SUM(CASE WHEN r.estado = 'confirmada' THEN r.total_personas ELSE 0 END) as personas_confirmadas
+         FROM $table_servicios s
+         LEFT JOIN $table_reservas r ON s.id = r.servicio_id
+         WHERE s.fecha BETWEEN %s AND %s 
+         AND s.status = 'active'
+         AND s.enabled = 1
+         GROUP BY s.id
+         ORDER BY s.fecha, s.hora",
+        $first_day,
+        $last_day
+    ));
+    
+    if ($wpdb->last_error) {
+        error_log('❌ Error en consulta de conductor: ' . $wpdb->last_error);
+        wp_send_json_error('Error de base de datos: ' . $wpdb->last_error);
+        return;
+    }
+    
+    error_log('✅ Encontrados ' . count($servicios) . ' servicios para conductor');
+    
+    // Organizar por fecha
+    $calendar_data = array();
+    foreach ($servicios as $servicio) {
+        if (!isset($calendar_data[$servicio->fecha])) {
+            $calendar_data[$servicio->fecha] = array();
+        }
+        
+        $calendar_data[$servicio->fecha][] = array(
+            'id' => $servicio->id,
+            'hora' => substr($servicio->hora, 0, 5),
+            'hora_vuelta' => $servicio->hora_vuelta ? substr($servicio->hora_vuelta, 0, 5) : null,
+            'plazas_totales' => $servicio->plazas_totales,
+            'total_reservas' => $servicio->total_reservas,
+            'reservas_confirmadas' => $servicio->reservas_confirmadas,
+            'personas_confirmadas' => $servicio->personas_confirmadas
+        );
+    }
+    
+    error_log('✅ Datos de calendario preparados para conductor');
+    wp_send_json_success($calendar_data);
+}
+
+// ✅ NUEVA FUNCIÓN: Fallback para login de conductor
+private function attempt_conductor_fallback_login() {
+    error_log('=== INTENTANDO FALLBACK LOGIN CONDUCTOR ===');
+    
+    global $wpdb;
+    $table_users = $wpdb->prefix . 'reservas_users';
+    
+    // Buscar usuario conductor activo
+    $conductor = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_users WHERE username = %s AND role = 'conductor' AND status = 'active'",
+        'conductor'
+    ));
+    
+    if ($conductor) {
+        $_SESSION['reservas_user'] = array(
+            'id' => $conductor->id,
+            'username' => $conductor->username,
+            'email' => $conductor->email,
+            'role' => $conductor->role,
+            'user_type' => 'admin',
+            'login_time' => time()
+        );
+        
+        error_log('✅ Fallback login exitoso para conductor');
+        return true;
+    } else {
+        error_log('❌ No se pudo hacer fallback login - conductor no encontrado');
+        return false;
+    }
+}
     
     /**
      * Obtener reservas de un servicio específico

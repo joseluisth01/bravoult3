@@ -12,7 +12,12 @@ let selectedServiceData = null;
  * Función principal: Cargar sección de calendario para conductores
  */
 function loadConductorCalendarSection() {
-    console.log('=== CARGANDO CALENDARIO PARA CONDUCTOR ===');
+    console.log('=== INICIANDO CALENDARIO CONDUCTOR ===');
+    
+    // Ejecutar debug si estamos en modo desarrollo
+    if (window.location.hostname === 'localhost' || window.location.hostname.includes('dev')) {
+        debugConductorSession();
+    }
     
     // Ocultar dashboard principal y mostrar calendario
     document.querySelector('.dashboard-content').style.display = 'none';
@@ -26,6 +31,7 @@ function loadConductorCalendarSection() {
                 <h1>📅 Servicios y Reservas</h1>
                 <div class="conductor-actions">
                     <button class="btn-info" onclick="showConductorSummary()">📊 Resumen</button>
+                    <button class="btn-info" onclick="debugConductorSession()" style="background: #ffc107;">🔧 Debug</button>
                     <button class="btn-secondary" onclick="goBackToConductorDashboard()">← Volver al Dashboard</button>
                 </div>
             </div>
@@ -39,9 +45,15 @@ function loadConductorCalendarSection() {
             <div id="conductor-calendar-container">
                 <div class="loading">Cargando calendario...</div>
             </div>
+            
+            <!-- Información de debug -->
+            <div id="conductor-debug-info" style="margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 8px; font-family: monospace; font-size: 12px; display: none;">
+                <strong>Información de Debug:</strong><br>
+                <span id="debug-content"></span>
+            </div>
         </div>
         
-        <!-- Modal para mostrar reservas de un servicio -->
+        <!-- Resto de modales sin cambios -->
         <div id="serviceReservationsModal" class="modal" style="display: none;">
             <div class="modal-content" style="max-width: 1200px;">
                 <span class="close" onclick="closeServiceReservationsModal()">&times;</span>
@@ -52,7 +64,6 @@ function loadConductorCalendarSection() {
             </div>
         </div>
         
-        <!-- Modal de resumen -->
         <div id="conductorSummaryModal" class="modal" style="display: none;">
             <div class="modal-content" style="max-width: 800px;">
                 <span class="close" onclick="closeConductorSummaryModal()">&times;</span>
@@ -422,8 +433,9 @@ function loadConductorCalendarSection() {
         </style>
     `;
     
-    // Cargar calendario
-    loadConductorCalendar();
+    setTimeout(() => {
+        loadConductorCalendar();
+    }, 100);
 }
 
 /**
@@ -440,32 +452,105 @@ function goBackToConductorDashboard() {
 function loadConductorCalendar() {
     updateConductorCalendarHeader();
     
+    console.log('=== INICIANDO CARGA DE CALENDARIO CONDUCTOR ===');
+    console.log('reservasAjax disponible:', typeof reservasAjax !== 'undefined');
+    console.log('AJAX URL:', reservasAjax?.ajax_url);
+    console.log('Nonce:', reservasAjax?.nonce);
+    
+    // ✅ VERIFICACIÓN MEJORADA DE VARIABLES
+    if (typeof reservasAjax === 'undefined') {
+        console.error('❌ reservasAjax no está definido');
+        document.getElementById('conductor-calendar-container').innerHTML = 
+            '<div class="error">Error: Variables de configuración no disponibles. Recarga la página.</div>';
+        return;
+    }
+    
+    if (!reservasAjax.ajax_url || !reservasAjax.nonce) {
+        console.error('❌ Faltan ajax_url o nonce');
+        document.getElementById('conductor-calendar-container').innerHTML = 
+            '<div class="error">Error: Configuración incompleta. Recarga la página.</div>';
+        return;
+    }
+    
     const formData = new FormData();
     formData.append('action', 'get_conductor_calendar_data');
     formData.append('month', conductorCurrentDate.getMonth() + 1);
     formData.append('year', conductorCurrentDate.getFullYear());
     formData.append('nonce', reservasAjax.nonce);
     
+    console.log('Enviando datos:', {
+        action: 'get_conductor_calendar_data',
+        month: conductorCurrentDate.getMonth() + 1,
+        year: conductorCurrentDate.getFullYear(),
+        nonce: reservasAjax.nonce
+    });
+    
     fetch(reservasAjax.ajax_url, {
         method: 'POST',
-        body: formData
+        body: formData,
+        credentials: 'same-origin'
     })
-    .then(response => response.json())
-    .then(data => {
-        console.log('Respuesta del servidor:', data);
-        if (data.success) {
-            conductorServicesData = data.data;
-            renderConductorCalendar();
-        } else {
-            console.error('Error cargando datos del conductor:', data.data);
+    .then(response => {
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
+        if (!response.ok) {
+            console.error('❌ Error HTTP:', response.status, response.statusText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        return response.text(); // ✅ OBTENER COMO TEXTO PRIMERO
+    })
+    .then(text => {
+        console.log('Raw response:', text.substring(0, 500) + (text.length > 500 ? '...' : ''));
+        
+        try {
+            const data = JSON.parse(text);
+            console.log('Parsed response:', data);
+            
+            if (data.success) {
+                conductorServicesData = data.data;
+                renderConductorCalendar();
+                console.log('✅ Calendario renderizado correctamente');
+            } else {
+                console.error('❌ Error del servidor:', data.data);
+                document.getElementById('conductor-calendar-container').innerHTML = 
+                    '<div class="error">Error del servidor: ' + (data.data || 'Error desconocido') + '</div>';
+            }
+        } catch (parseError) {
+            console.error('❌ Error parsing JSON:', parseError);
+            console.error('Raw response was:', text);
             document.getElementById('conductor-calendar-container').innerHTML = 
-                '<div class="error">Error: ' + data.data + '</div>';
+                '<div class="error">Error de comunicación con el servidor. Raw response: ' + text.substring(0, 200) + '</div>';
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        console.error('❌ Fetch error:', error);
         document.getElementById('conductor-calendar-container').innerHTML = 
-            '<div class="error">Error de conexión</div>';
+            '<div class="error">Error de conexión: ' + error.message + '</div>';
+    });
+}
+
+// ✅ NUEVA FUNCIÓN: Debug para conductor
+function debugConductorSession() {
+    console.log('=== DEBUG SESIÓN CONDUCTOR ===');
+    
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'debug_conductor_session',
+            nonce: reservasAjax.nonce
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Debug session response:', data);
+    })
+    .catch(error => {
+        console.error('Debug session error:', error);
     });
 }
 
