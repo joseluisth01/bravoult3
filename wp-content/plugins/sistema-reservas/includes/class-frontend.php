@@ -212,53 +212,81 @@ public function get_available_services()
 
     $dias_anticipacion = ReservasConfigurationAdmin::get_dias_anticipacion_minima();
 
-    // ✅ CORRECCIÓN: Calcular fecha mínima correctamente
-    $fecha_minima = date('Y-m-d'); // Hoy por defecto
-    if ($dias_anticipacion > 0) {
-        $fecha_minima = date('Y-m-d', strtotime("+$dias_anticipacion days"));
-    }
-
-    // ✅ OBTENER FECHA Y HORA ACTUAL EXACTA
+    // ✅ FECHAS IMPORTANTES
     $fecha_hoy = date('Y-m-d');
     $hora_actual = date('H:i:s');
-    
-    // ✅ CREAR DATETIME COMPLETO PARA COMPARACIÓN MÁS PRECISA
     $datetime_actual = date('Y-m-d H:i:s');
 
+    // ✅ CALCULAR FECHA MÍNIMA SOLO PARA DÍAS FUTUROS
+    $fecha_minima = $fecha_hoy; // Por defecto, permitir desde hoy
+    if ($dias_anticipacion > 0) {
+        // Solo aplicar días de anticipación para fechas FUTURAS, no para hoy
+        $fecha_minima_futura = date('Y-m-d', strtotime("+$dias_anticipacion days"));
+    } else {
+        $fecha_minima_futura = $fecha_hoy;
+    }
+
     error_log("FRONTEND: Días anticipación: $dias_anticipacion");
-    error_log("FRONTEND: Fecha mínima: $fecha_minima");
     error_log("FRONTEND: Fecha hoy: $fecha_hoy");
     error_log("FRONTEND: Hora actual: $hora_actual");
-    error_log("FRONTEND: DateTime actual: $datetime_actual");
+    error_log("FRONTEND: Fecha mínima futura: $fecha_minima_futura");
 
-    // ✅ CONSULTA CORREGIDA CON MEJOR FILTRO DE HORAS
+    // ✅ CONSULTA CORREGIDA: Permitir hoy siempre, aplicar anticipación solo a futuro
     $servicios = $wpdb->get_results($wpdb->prepare(
         "SELECT id, fecha, hora, hora_vuelta, plazas_disponibles, precio_adulto, precio_nino, precio_residente, 
         tiene_descuento, porcentaje_descuento, descuento_tipo, descuento_minimo_personas
         FROM $table_name 
         WHERE fecha BETWEEN %s AND %s 
-        AND fecha >= %s
         AND status = 'active'
         AND enabled = 1
         AND plazas_disponibles > 0
         AND (
-            fecha > %s 
-            OR (fecha = %s AND CONCAT(fecha, ' ', hora) > %s)
+            fecha = %s 
+            OR (fecha > %s AND fecha >= %s)
         )
         ORDER BY fecha, hora",
-        $first_day,           // Rango del mes
-        $last_day,            // Rango del mes  
-        $fecha_minima,        // Fecha mínima por configuración
-        $fecha_hoy,           // Para fechas futuras
-        $fecha_hoy,           // Para el día de hoy
-        $datetime_actual      // Comparar con datetime completo para hoy
+        $first_day,              // Rango del mes
+        $last_day,               // Rango del mes  
+        $fecha_hoy,              // ✅ PERMITIR HOY SIEMPRE
+        $fecha_hoy,              // ✅ Para fechas futuras
+        $fecha_minima_futura     // ✅ Aplicar anticipación solo a futuro
     ));
 
-    error_log("FRONTEND: Servicios encontrados: " . count($servicios));
+    error_log("FRONTEND: Servicios encontrados antes de filtro de horas: " . count($servicios));
+
+    // ✅ FILTRAR SERVICIOS POR HORA SOLO PARA EL DÍA DE HOY
+    $servicios_filtrados = array();
+    
+    foreach ($servicios as $servicio) {
+        $incluir_servicio = true;
+        
+        // Solo filtrar por hora si es el día de hoy
+        if ($servicio->fecha === $fecha_hoy) {
+            // Crear datetime completo del servicio
+            $servicio_datetime = $servicio->fecha . ' ' . $servicio->hora;
+            
+            // Solo incluir si la hora del servicio es posterior a la hora actual
+            if ($servicio_datetime <= $datetime_actual) {
+                $incluir_servicio = false;
+                error_log("FRONTEND: Servicio excluido (hora pasada): {$servicio->fecha} {$servicio->hora}");
+            } else {
+                error_log("FRONTEND: Servicio incluido (hora futura): {$servicio->fecha} {$servicio->hora}");
+            }
+        } else {
+            // Para fechas futuras, incluir todos los servicios
+            error_log("FRONTEND: Servicio incluido (fecha futura): {$servicio->fecha} {$servicio->hora}");
+        }
+        
+        if ($incluir_servicio) {
+            $servicios_filtrados[] = $servicio;
+        }
+    }
+
+    error_log("FRONTEND: Servicios después de filtro de horas: " . count($servicios_filtrados));
 
     // Organizar por fecha
     $calendar_data = array();
-    foreach ($servicios as $servicio) {
+    foreach ($servicios_filtrados as $servicio) {
         if (!isset($calendar_data[$servicio->fecha])) {
             $calendar_data[$servicio->fecha] = array();
         }
@@ -277,6 +305,8 @@ public function get_available_services()
             'descuento_minimo_personas' => $servicio->descuento_minimo_personas ?? 1
         );
     }
+
+    error_log("FRONTEND: Fechas con servicios: " . implode(', ', array_keys($calendar_data)));
 
     wp_send_json_success($calendar_data);
 }
