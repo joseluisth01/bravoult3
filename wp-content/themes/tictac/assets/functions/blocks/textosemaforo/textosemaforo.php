@@ -226,7 +226,7 @@ function textosemaforo($block)
                             <div class="semaforo-item">
                                 <div class="semaforo-textos">
                                     <?php if ($paso['titulo_paso']) : ?>
-                                        <h3 class="semaforo-titulo-paso"><?php echo $paso['titulo_paso']; ?></h3>
+                                        <p class="semaforo-titulo-paso"><?php echo $paso['titulo_paso']; ?></p>
                                     <?php endif; ?>
                                     <div class="divrayas">
                                         <img class="semaforo-imagen-gif" style="width: 70px;" src="<?php echo $upload_dir['baseurl']; ?>/2025/07/5fffe74ddf3130e7bf4894e67417eb025220228b.gif" alt="">

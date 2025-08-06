@@ -80,7 +80,7 @@ class ReservasFrontend
                 <div class="booking-steps-grid">
                     <!-- Columna izquierda: Calendario -->
                     <div class="step-card">
-                        <h3>1. ELIGE EL DÍA Y LA HORA</h3>
+                        <p class="h33">1. ELIGE EL DÍA Y LA HORA</p>
                         <div class="calendar-container">
                             <div class="calendar-header">
                                 <button type="button" id="prev-month">‹</button>
@@ -115,7 +115,7 @@ class ReservasFrontend
 
                     <!-- Columna derecha: Selección de personas -->
                     <div class="step-card">
-                        <h3>2. SELECCIONA LAS PERSONAS</h3>
+                        <p class="h33">2. SELECCIONA LAS PERSONAS</p>
                         <div class="calendar-container">
                             <div class="persons-grid">
                                 <div class="person-selector">

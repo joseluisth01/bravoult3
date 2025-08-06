@@ -26,16 +26,16 @@
     margin: 0px !important;
 }
 
-.step-card h3 {
+.step-card .h33 {
     background: #EFCF4B;
     margin: 0;
     padding: 20px;
     text-align: center;
-    font-weight: bold;
-    font-size: 24px;
-    color: #333;
-    font-family: 'Duran-Medium';
-    letter-spacing: 1px;
+    font-weight: bold !important;
+    font-size: 24px !important;
+    color: #333 !important;
+    font-family: 'Duran-Medium' !important;
+    letter-spacing: 1px !important;
 }
 
 *{

@@ -13,17 +13,22 @@
   <link rel="icon" type="image/x-icon" href="<?= site_url('/favicon.ico'); ?>">
 
   <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-ZP27ZGNFQ5"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZP27ZGNFQ5"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
 
-  gtag('config', 'G-ZP27ZGNFQ5');
-</script>
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+    gtag('js', new Date());
+
+    gtag('config', 'G-ZP27ZGNFQ5');
+  </script>
 
   <script type="text/javascript" src="https://cache.consentframework.com/js/pa/48113/c/zLPp2/stub"></script>
-<script type="text/javascript" src="https://choices.consentframework.com/js/pa/48113/c/zLPp2/cmp" async></script>
+  <script type="text/javascript" src="https://choices.consentframework.com/js/pa/48113/c/zLPp2/cmp" async></script>
+
+  <meta name="google-site-verification" content="nilG5lz23BQyp_AYsIMygG_7h98-WMr0HHQFUPOdki8" />
 </head>
 <?php $post_slug = get_post_field('post_name', get_post()); ?>
 
@@ -73,7 +78,7 @@
           <span></span>
           <span></span>
         </div>
-        
+
       </div>
 
     </div>
@@ -127,9 +132,11 @@
     .desktop-search .search-field::placeholder {
       color: #999;
     }
-.buttonreservarresponsive{
-  display: none;
-}
+
+    .buttonreservarresponsive {
+      display: none;
+    }
+
     .search-submit {
       background: transparent;
       border: none;
@@ -265,40 +272,40 @@
   <script>
     // JavaScript para el menú móvil - Agregar al final del header.php o en un archivo JS separado
 
-document.addEventListener('DOMContentLoaded', function() {
-    const menuButton = document.querySelector('.menuOpen');
-    const mobileMenu = document.querySelector('#menu.menu-mobile');
-    
-    if (menuButton && mobileMenu) {
+    document.addEventListener('DOMContentLoaded', function() {
+      const menuButton = document.querySelector('.menuOpen');
+      const mobileMenu = document.querySelector('#menu.menu-mobile');
+
+      if (menuButton && mobileMenu) {
         menuButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Toggle de las clases
-            menuButton.classList.toggle('opened');
-            mobileMenu.classList.toggle('opened');
-            
-            // Debug para verificar que funciona
-            console.log('Menu button clicked');
-            console.log('Menu opened:', mobileMenu.classList.contains('opened'));
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Toggle de las clases
+          menuButton.classList.toggle('opened');
+          mobileMenu.classList.toggle('opened');
+
+          // Debug para verificar que funciona
+          console.log('Menu button clicked');
+          console.log('Menu opened:', mobileMenu.classList.contains('opened'));
         });
-        
+
         // Cerrar menú al hacer clic en un enlace (opcional)
         const menuLinks = mobileMenu.querySelectorAll('a');
         menuLinks.forEach(function(link) {
-            link.addEventListener('click', function() {
-                menuButton.classList.remove('opened');
-                mobileMenu.classList.remove('opened');
-            });
+          link.addEventListener('click', function() {
+            menuButton.classList.remove('opened');
+            mobileMenu.classList.remove('opened');
+          });
         });
-        
+
         // Cerrar menú al hacer clic fuera (opcional)
         document.addEventListener('click', function(e) {
-            if (!menuButton.contains(e.target) && !mobileMenu.contains(e.target)) {
-                menuButton.classList.remove('opened');
-                mobileMenu.classList.remove('opened');
-            }
+          if (!menuButton.contains(e.target) && !mobileMenu.contains(e.target)) {
+            menuButton.classList.remove('opened');
+            mobileMenu.classList.remove('opened');
+          }
         });
-    }
-});
+      }
+    });
   </script>
