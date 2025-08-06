@@ -166,20 +166,12 @@ jQuery(document).ready(function ($) {
         calendarHTML += `<div class="calendar-day other-month">${dayNum}</div>`;
     }
 
-    // ✅ CALCULAR FECHA MÍNIMA CORRECTAMENTE
+    // ✅ LÓGICA CORREGIDA PARA DÍAS DE ANTICIPACIÓN
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Resetear hora para comparación de solo fecha
 
     console.log(`Configuración frontend: ${diasAnticiapcionMinima} días de anticipación`);
     console.log(`Fecha actual: ${today.toDateString()}`);
-
-    // ✅ CORRECCIÓN: La fecha mínima para fechas FUTURAS
-    let fechaMinimaFutura = new Date(today);
-    if (diasAnticiapcionMinima > 0) {
-        fechaMinimaFutura.setDate(today.getDate() + diasAnticiapcionMinima);
-    }
-
-    console.log(`Fecha mínima para días futuros: ${fechaMinimaFutura.toDateString()}`);
 
     // Días del mes actual
     for (let day = 1; day <= daysInMonth; day++) {
@@ -190,15 +182,33 @@ jQuery(document).ready(function ($) {
         let dayClass = 'calendar-day';
         let clickHandler = '';
 
-        // ✅ NUEVA LÓGICA: El día de HOY siempre está permitido
+        // ✅ NUEVA LÓGICA CORRECTA
         const isToday = dateStr === today.toISOString().split('T')[0];
-        const isFutureBlocked = !isToday && dayDate < fechaMinimaFutura;
+        const isPastDate = dayDate < today;
+        
+        // ✅ SOLO BLOQUEAR FECHAS PASADAS Y APLICAR ANTICIPACIÓN SOLO A FECHAS FUTURAS
+        let isBlocked = false;
+        
+        if (isPastDate) {
+            // Fechas pasadas siempre bloqueadas
+            isBlocked = true;
+            console.log(`Día ${day} bloqueado (fecha pasada)`);
+        } else if (!isToday && diasAnticiapcionMinima > 0) {
+            // Para fechas futuras (no hoy), aplicar días de anticipación
+            const fechaMinimaFutura = new Date(today);
+            fechaMinimaFutura.setDate(today.getDate() + diasAnticiapcionMinima);
+            
+            if (dayDate < fechaMinimaFutura) {
+                isBlocked = true;
+                console.log(`Día ${day} bloqueado por anticipación mínima`);
+            }
+        }
+        // ✅ HOY NUNCA SE BLOQUEA POR ANTICIPACIÓN
 
-        console.log(`Día ${day}: es hoy: ${isToday}, futuro bloqueado: ${isFutureBlocked}`);
+        console.log(`Día ${day}: es hoy: ${isToday}, es pasado: ${isPastDate}, bloqueado: ${isBlocked}`);
 
-        if (isFutureBlocked) {
+        if (isBlocked) {
             dayClass += ' no-disponible';
-            console.log(`Día ${day} bloqueado por anticipación mínima`);
         } else if (servicesData[dateStr] && servicesData[dateStr].length > 0) {
             // ✅ HAY SERVICIOS PARA ESTA FECHA
             const servicesAvailable = servicesData[dateStr];
@@ -291,66 +301,66 @@ jQuery(document).ready(function ($) {
     }
 
     function loadAvailableSchedules(dateStr) {
-    const services = servicesData[dateStr] || [];
-    const today = new Date();
-    const selectedDay = new Date(dateStr + 'T00:00:00');
-    const isToday = dateStr === today.toISOString().split('T')[0];
+        const services = servicesData[dateStr] || [];
+        const today = new Date();
+        const selectedDay = new Date(dateStr + 'T00:00:00');
+        const isToday = dateStr === today.toISOString().split('T')[0];
 
-    let optionsHTML = '<option value="">Selecciona un horario</option>';
+        let optionsHTML = '<option value="">Selecciona un horario</option>';
 
-    services.forEach(service => {
-        let shouldShowService = true;
+        services.forEach(service => {
+            let shouldShowService = true;
 
-        // ✅ FILTRAR HORAS PASADAS SOLO PARA EL DÍA DE HOY
-        if (isToday) {
-            const now = new Date();
-            const currentHour = now.getHours();
-            const currentMinute = now.getMinutes();
-            const currentTimeInMinutes = currentHour * 60 + currentMinute;
+            // ✅ FILTRAR HORAS PASADAS SOLO PARA EL DÍA DE HOY
+            if (isToday) {
+                const now = new Date();
+                const currentHour = now.getHours();
+                const currentMinute = now.getMinutes();
+                const currentTimeInMinutes = currentHour * 60 + currentMinute;
 
-            const serviceTime = service.hora.split(':');
-            const serviceHour = parseInt(serviceTime[0]);
-            const serviceMinute = parseInt(serviceTime[1]);
-            const serviceTimeInMinutes = serviceHour * 60 + serviceMinute;
+                const serviceTime = service.hora.split(':');
+                const serviceHour = parseInt(serviceTime[0]);
+                const serviceMinute = parseInt(serviceTime[1]);
+                const serviceTimeInMinutes = serviceHour * 60 + serviceMinute;
 
-            // Solo mostrar servicios futuros para hoy
-            shouldShowService = serviceTimeInMinutes > currentTimeInMinutes;
+                // Solo mostrar servicios futuros para hoy
+                shouldShowService = serviceTimeInMinutes > currentTimeInMinutes;
 
-            if (!shouldShowService) {
-                console.log(`Servicio ${service.hora} omitido (hora pasada para hoy)`);
-                return; // Saltar este servicio
+                if (!shouldShowService) {
+                    console.log(`Servicio ${service.hora} omitido (hora pasada para hoy)`);
+                    return; // Saltar este servicio
+                }
             }
-        }
-        // Para días futuros, mostrar todos los servicios
+            // Para días futuros, mostrar todos los servicios
 
-        let descuentoInfo = '';
+            let descuentoInfo = '';
 
-        // ✅ LÓGICA MEJORADA PARA MOSTRAR INFORMACIÓN DEL DESCUENTO
-        if (service.tiene_descuento && parseFloat(service.porcentaje_descuento) > 0) {
-            const porcentaje = parseFloat(service.porcentaje_descuento);
-            const tipo = service.descuento_tipo || 'fijo';
-            const minimo = parseInt(service.descuento_minimo_personas) || 1;
+            // ✅ LÓGICA MEJORADA PARA MOSTRAR INFORMACIÓN DEL DESCUENTO
+            if (service.tiene_descuento && parseFloat(service.porcentaje_descuento) > 0) {
+                const porcentaje = parseFloat(service.porcentaje_descuento);
+                const tipo = service.descuento_tipo || 'fijo';
+                const minimo = parseInt(service.descuento_minimo_personas) || 1;
 
-            if (tipo === 'fijo') {
-                // Descuento fijo para todos
-                descuentoInfo = ` (${porcentaje}% descuento)`;
-            } else if (tipo === 'por_grupo') {
-                // Descuento por grupo con mínimo de personas
-                descuentoInfo = ` (${porcentaje}% descuento desde ${minimo} personas)`;
+                if (tipo === 'fijo') {
+                    // Descuento fijo para todos
+                    descuentoInfo = ` (${porcentaje}% descuento)`;
+                } else if (tipo === 'por_grupo') {
+                    // Descuento por grupo con mínimo de personas
+                    descuentoInfo = ` (${porcentaje}% descuento desde ${minimo} personas)`;
+                }
             }
-        }
 
-        optionsHTML += `<option value="${service.id}" 
+            optionsHTML += `<option value="${service.id}" 
                        data-plazas="${service.plazas_disponibles}"
                        data-descuento-tipo="${service.descuento_tipo || 'fijo'}"
                        data-descuento-minimo="${service.descuento_minimo_personas || 1}">
                     ${service.hora} - ${service.plazas_disponibles} plazas disponibles${descuentoInfo}
                 </option>`;
-    });
+        });
 
-    $('#horarios-select').html(optionsHTML).prop('disabled', false);
-    $('#btn-siguiente').prop('disabled', true);
-}
+        $('#horarios-select').html(optionsHTML).prop('disabled', false);
+        $('#btn-siguiente').prop('disabled', true);
+    }
 
     function loadPrices() {
         if (!selectedServiceId) return;
@@ -642,85 +652,85 @@ jQuery(document).ready(function ($) {
     };
 
     window.proceedToDetails = function () {
-    console.log('=== INICIANDO proceedToDetails CON REDSYS ===');
+        console.log('=== INICIANDO proceedToDetails CON REDSYS ===');
 
-    if (!selectedDate || !selectedServiceId) {
-        alert('Error: No hay fecha o servicio seleccionado');
-        return;
-    }
-
-    const service = findServiceById(selectedServiceId);
-    if (!service) {
-        alert('Error: No se encontraron datos del servicio');
-        return;
-    }
-
-    const adultos = parseInt($('#adultos').val()) || 0;
-    const residentes = parseInt($('#residentes').val()) || 0;
-    const ninos_5_12 = parseInt($('#ninos-5-12').val()) || 0;
-    const ninos_menores = parseInt($('#ninos-menores').val()) || 0;
-
-    let totalPrice = '0';
-    try {
-        const totalPriceElement = $('#total-price');
-        if (totalPriceElement.length > 0) {
-            const totalPriceText = totalPriceElement.text();
-            totalPrice = totalPriceText.replace('€', '').trim();
+        if (!selectedDate || !selectedServiceId) {
+            alert('Error: No hay fecha o servicio seleccionado');
+            return;
         }
-    } catch (error) {
-        console.error('Error obteniendo precio total:', error);
-    }
 
-    const reservationData = {
-        fecha: selectedDate,
-        service_id: selectedServiceId,
-        hora_ida: service.hora,
-        hora_vuelta: service.hora_vuelta || '',
-        adultos: adultos,
-        residentes: residentes,
-        ninos_5_12: ninos_5_12,
-        ninos_menores: ninos_menores,
-        precio_adulto: service.precio_adulto,
-        precio_nino: service.precio_nino,
-        precio_residente: service.precio_residente,
-        total_price: totalPrice,
-        descuento_grupo: $('#total-discount').text().includes('€') ?
-            parseFloat($('#total-discount').text().replace('€', '').replace('-', '')) : 0,
-        regla_descuento_aplicada: window.lastDiscountRule || null
-    };
+        const service = findServiceById(selectedServiceId);
+        if (!service) {
+            alert('Error: No se encontraron datos del servicio');
+            return;
+        }
 
-    console.log('Datos de reserva preparados:', reservationData);
+        const adultos = parseInt($('#adultos').val()) || 0;
+        const residentes = parseInt($('#residentes').val()) || 0;
+        const ninos_5_12 = parseInt($('#ninos-5-12').val()) || 0;
+        const ninos_menores = parseInt($('#ninos-menores').val()) || 0;
 
-    try {
-        const dataString = JSON.stringify(reservationData);
-        sessionStorage.setItem('reservationData', dataString);
-        console.log('Datos guardados en sessionStorage exitosamente');
-    } catch (error) {
-        console.error('Error guardando en sessionStorage:', error);
-        alert('Error guardando los datos de la reserva: ' + error.message);
-        return;
-    }
+        let totalPrice = '0';
+        try {
+            const totalPriceElement = $('#total-price');
+            if (totalPriceElement.length > 0) {
+                const totalPriceText = totalPriceElement.text();
+                totalPrice = totalPriceText.replace('€', '').trim();
+            }
+        } catch (error) {
+            console.error('Error obteniendo precio total:', error);
+        }
 
-    // ✅ CALCULAR URL DESTINO DE FORMA MEJORADA
-    let targetUrl;
-    const currentPath = window.location.pathname;
+        const reservationData = {
+            fecha: selectedDate,
+            service_id: selectedServiceId,
+            hora_ida: service.hora,
+            hora_vuelta: service.hora_vuelta || '',
+            adultos: adultos,
+            residentes: residentes,
+            ninos_5_12: ninos_5_12,
+            ninos_menores: ninos_menores,
+            precio_adulto: service.precio_adulto,
+            precio_nino: service.precio_nino,
+            precio_residente: service.precio_residente,
+            total_price: totalPrice,
+            descuento_grupo: $('#total-discount').text().includes('€') ?
+                parseFloat($('#total-discount').text().replace('€', '').replace('-', '')) : 0,
+            regla_descuento_aplicada: window.lastDiscountRule || null
+        };
 
-    if (currentPath.includes('/bravo/')) {
-        targetUrl = window.location.origin + '/bravo/detalles-reserva/';
-    } else if (currentPath.includes('/')) {
-        const pathParts = currentPath.split('/').filter(part => part !== '');
-        if (pathParts.length > 0 && pathParts[0] !== 'detalles-reserva') {
-            targetUrl = window.location.origin + '/' + pathParts[0] + '/detalles-reserva/';
+        console.log('Datos de reserva preparados:', reservationData);
+
+        try {
+            const dataString = JSON.stringify(reservationData);
+            sessionStorage.setItem('reservationData', dataString);
+            console.log('Datos guardados en sessionStorage exitosamente');
+        } catch (error) {
+            console.error('Error guardando en sessionStorage:', error);
+            alert('Error guardando los datos de la reserva: ' + error.message);
+            return;
+        }
+
+        // ✅ CALCULAR URL DESTINO DE FORMA MEJORADA
+        let targetUrl;
+        const currentPath = window.location.pathname;
+
+        if (currentPath.includes('/bravo/')) {
+            targetUrl = window.location.origin + '/bravo/detalles-reserva/';
+        } else if (currentPath.includes('/')) {
+            const pathParts = currentPath.split('/').filter(part => part !== '');
+            if (pathParts.length > 0 && pathParts[0] !== 'detalles-reserva') {
+                targetUrl = window.location.origin + '/' + pathParts[0] + '/detalles-reserva/';
+            } else {
+                targetUrl = window.location.origin + '/detalles-reserva/';
+            }
         } else {
             targetUrl = window.location.origin + '/detalles-reserva/';
         }
-    } else {
-        targetUrl = window.location.origin + '/detalles-reserva/';
-    }
 
-    console.log('Redirigiendo a:', targetUrl);
-    window.location.href = targetUrl;
-};
+        console.log('Redirigiendo a:', targetUrl);
+        window.location.href = targetUrl;
+    };
 
     window.selectDate = selectDate;
     window.findServiceById = findServiceById;
@@ -796,9 +806,9 @@ function processReservation() {
         const originalText = processBtn.textContent;
         processBtn.disabled = true;
         processBtn.textContent = "Redirigiendo al banco...";
-        
+
         // Función para rehabilitar botón
-        window.enableProcessButton = function() {
+        window.enableProcessButton = function () {
             processBtn.disabled = false;
             processBtn.textContent = originalText;
         };
@@ -821,74 +831,74 @@ function processReservation() {
         },
         body: new URLSearchParams(requestData)
     })
-    .then(response => {
-        console.log("Response status:", response.status);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        return response.json();
-    })
-    .then(data => {
-        console.log("Respuesta del servidor:", data);
+        .then(response => {
+            console.log("Response status:", response.status);
 
-        // Rehabilitar botón
-        if (window.enableProcessButton) window.enableProcessButton();
-
-        if (data && data.success) {
-            console.log("✅ Formulario de Redsys generado correctamente");
-            
-            // ✅ INSERTAR FORMULARIO Y EJECUTAR INMEDIATAMENTE
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = data.data;
-            document.body.appendChild(tempDiv);
-            
-            console.log("🏦 Formulario insertado en DOM");
-            
-            // ✅ VERIFICAR QUE EL FORMULARIO SE INSERTÓ CORRECTAMENTE
-            const insertedForm = document.getElementById('formulario_redsys');
-            const insertedOverlay = document.getElementById('redsys-overlay');
-            
-            if (insertedForm && insertedOverlay) {
-                console.log("✅ Elementos encontrados, formulario debe ejecutarse automáticamente");
-                
-                // ✅ BACKUP: Si no se ejecuta automáticamente en 3 segundos, forzar envío
-                setTimeout(() => {
-                    if (document.getElementById('redsys-overlay')) {
-                        console.log("⚠️ Ejecutando envío manual de respaldo...");
-                        insertedForm.submit();
-                    }
-                }, 3000);
-            } else {
-                console.error("❌ No se encontraron elementos del formulario después de insertar");
-                alert("Error procesando el pago. Por favor, inténtalo de nuevo.");
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
-        } else {
-            console.error("❌ Error generando formulario Redsys:", data);
-            const errorMsg = data && data.data ? data.data : "Error generando formulario de pago";
-            alert("Error: " + errorMsg);
-        }
-    })
-    .catch(error => {
-        console.error("❌ Error de conexión:", error);
 
-        // Rehabilitar botón
-        if (window.enableProcessButton) window.enableProcessButton();
+            return response.json();
+        })
+        .then(data => {
+            console.log("Respuesta del servidor:", data);
 
-        let errorMessage = "Error de conexión al generar el formulario de pago.";
-        if (error.message.includes('403')) {
-            errorMessage += " (Error 403: Acceso denegado)";
-        } else if (error.message.includes('404')) {
-            errorMessage += " (Error 404: URL no encontrada)";
-        } else if (error.message.includes('500')) {
-            errorMessage += " (Error 500: Error interno del servidor)";
-        }
+            // Rehabilitar botón
+            if (window.enableProcessButton) window.enableProcessButton();
 
-        errorMessage += "\n\nPor favor, inténtalo de nuevo.";
-        alert(errorMessage);
-    });
+            if (data && data.success) {
+                console.log("✅ Formulario de Redsys generado correctamente");
+
+                // ✅ INSERTAR FORMULARIO Y EJECUTAR INMEDIATAMENTE
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = data.data;
+                document.body.appendChild(tempDiv);
+
+                console.log("🏦 Formulario insertado en DOM");
+
+                // ✅ VERIFICAR QUE EL FORMULARIO SE INSERTÓ CORRECTAMENTE
+                const insertedForm = document.getElementById('formulario_redsys');
+                const insertedOverlay = document.getElementById('redsys-overlay');
+
+                if (insertedForm && insertedOverlay) {
+                    console.log("✅ Elementos encontrados, formulario debe ejecutarse automáticamente");
+
+                    // ✅ BACKUP: Si no se ejecuta automáticamente en 3 segundos, forzar envío
+                    setTimeout(() => {
+                        if (document.getElementById('redsys-overlay')) {
+                            console.log("⚠️ Ejecutando envío manual de respaldo...");
+                            insertedForm.submit();
+                        }
+                    }, 3000);
+                } else {
+                    console.error("❌ No se encontraron elementos del formulario después de insertar");
+                    alert("Error procesando el pago. Por favor, inténtalo de nuevo.");
+                }
+
+            } else {
+                console.error("❌ Error generando formulario Redsys:", data);
+                const errorMsg = data && data.data ? data.data : "Error generando formulario de pago";
+                alert("Error: " + errorMsg);
+            }
+        })
+        .catch(error => {
+            console.error("❌ Error de conexión:", error);
+
+            // Rehabilitar botón
+            if (window.enableProcessButton) window.enableProcessButton();
+
+            let errorMessage = "Error de conexión al generar el formulario de pago.";
+            if (error.message.includes('403')) {
+                errorMessage += " (Error 403: Acceso denegado)";
+            } else if (error.message.includes('404')) {
+                errorMessage += " (Error 404: URL no encontrada)";
+            } else if (error.message.includes('500')) {
+                errorMessage += " (Error 500: Error interno del servidor)";
+            }
+
+            errorMessage += "\n\nPor favor, inténtalo de nuevo.";
+            alert(errorMessage);
+        });
 }
 
 function goBackToBooking() {
