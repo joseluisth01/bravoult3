@@ -396,7 +396,7 @@ function renderCalendar() {
 
                 // ✅ AÑADIR PLAZAS DISPONIBLES
                 const plazasText = ` - ${service.plazas_disponibles} plazas`;
-                
+
                 // ✅ AÑADIR CLASE DE ADVERTENCIA SI POCAS PLAZAS
                 if (service.plazas_disponibles <= 5 && service.plazas_disponibles > 0) {
                     serviceClass += ' service-low-availability';
@@ -1976,6 +1976,12 @@ function showConfigurationNotification(message, type) {
 
 
 function loadReportsSection() {
+        console.log('=== VARIABLES AJAX DISPONIBLES ===');
+    console.log('dashboard_vars:', typeof dashboard_vars !== 'undefined' ? dashboard_vars : 'NO DEFINIDO');
+    console.log('ajaxurl:', typeof ajaxurl !== 'undefined' ? ajaxurl : 'NO DEFINIDO');
+    console.log('reservas_ajax:', typeof reservas_ajax !== 'undefined' ? reservas_ajax : 'NO DEFINIDO');
+  
+
     document.body.innerHTML = `
         <div class="reports-management">
             <div class="reports-header">
@@ -2035,6 +2041,11 @@ function loadReportsSection() {
                                 </div>
                                 <div class="filter-group">
                                     <button class="btn-primary" onclick="loadReservationsByDateWithFilters()">🔍 Aplicar Filtros</button>
+                                </div>
+                                <div class="filter-group">
+                                    <button id="download-pdf-report" class="btn btn-success" style="margin-left: 10px;">
+                                        📄 Descargar PDF
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -2258,6 +2269,138 @@ function loadReportsSection() {
         // Continuar con la carga de datos aunque fallen las agencias
         loadReservationsByDateWithFilters();
     });
+
+    // Añadir event listener para el botón PDF
+    document.getElementById('download-pdf-report').addEventListener('click', function () {
+        downloadPDFReport();
+    });
+
+
+}
+
+function downloadPDFReport() {
+    console.log('🎫 Iniciando descarga de PDF...');
+
+    // ✅ CREAR NONCE USANDO FUNCIÓN DE WORDPRESS
+    const wpNonce = typeof dashboard_vars !== 'undefined' 
+        ? dashboard_vars.nonce 
+        : document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+    const ajaxUrl = typeof dashboard_vars !== 'undefined' 
+        ? dashboard_vars.ajax_url 
+        : (typeof ajaxurl !== 'undefined' ? ajaxurl : '/wp-admin/admin-ajax.php');
+
+    const filtros = {
+        fecha_inicio: document.getElementById('fecha-inicio').value,
+        fecha_fin: document.getElementById('fecha-fin').value,
+        tipo_fecha: document.getElementById('tipo-fecha').value,
+        estado_filtro: document.getElementById('estado-filtro').value,
+        agency_filter: document.getElementById('agency-filtro').value,
+        nonce: wpNonce
+    };
+
+    console.log('📋 Filtros capturados:', filtros);
+    console.log('🌐 AJAX URL:', ajaxUrl);
+    console.log('🔐 Nonce:', wpNonce);
+
+    // Validar configuración
+    if (!ajaxUrl) {
+        alert('Error de configuración: URL AJAX no disponible');
+        return;
+    }
+
+    if (!wpNonce) {
+        console.warn('⚠️ Nonce no disponible, continuando sin él');
+    }
+
+    // Validar formulario
+    if (!filtros.fecha_inicio || !filtros.fecha_fin) {
+        alert('Por favor, selecciona las fechas de inicio y fin');
+        return;
+    }
+
+    // Mostrar loading
+    const button = document.getElementById('download-pdf-report');
+    const originalText = button.innerHTML;
+    button.innerHTML = '⏳ Generando PDF...';
+    button.disabled = true;
+
+    // Realizar petición AJAX
+    fetch(ajaxUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'generate_reservations_pdf_report',
+            ...filtros
+        })
+    })
+    .then(response => {
+        console.log('📡 Respuesta recibida del servidor');
+        return response.json();
+    })
+    .then(data => {
+        console.log('📊 Datos del servidor:', data);
+
+        button.innerHTML = originalText;
+        button.disabled = false;
+
+        if (data.success) {
+            console.log('✅ PDF generado exitosamente');
+
+            // Descargar archivo
+            const link = document.createElement('a');
+            link.href = data.data.pdf_url;
+            link.download = data.data.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Mostrar mensaje de éxito
+            showNotification('PDF generado correctamente', 'success');
+        } else {
+            console.error('❌ Error del servidor:', data.data);
+            showNotification('Error generando PDF: ' + data.data, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error de conexión:', error);
+
+        button.innerHTML = originalText;
+        button.disabled = false;
+        showNotification('Error de conexión al generar PDF', 'error');
+    });
+}
+
+function showNotification(message, type) {
+    console.log(`${type === 'success' ? '✅' : '❌'} ${message}`);
+
+    // ✅ MEJORAR NOTIFICACIÓN VISUAL
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 5px;
+        color: white;
+        font-weight: bold;
+        z-index: 10000;
+        max-width: 400px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        background: ${type === 'success' ? '#28a745' : '#dc3545'};
+    `;
+    notification.textContent = message;
+
+    document.body.appendChild(notification);
+
+    // Auto-eliminar después de 5 segundos
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 5000);
 }
 
 function loadReservationsByDateWithFilters(page = 1) {
@@ -2791,6 +2934,14 @@ function initReportsEvents() {
             searchValue.placeholder = 'Introduce el valor a buscar...';
         }
     });
+
+    const pdfButton = document.getElementById('download-pdf-report');
+    if (pdfButton) {
+        pdfButton.addEventListener('click', function () {
+            console.log('🎯 Botón PDF clickeado');
+            downloadPDFReport();
+        });
+    }
 
     // ✅ VERIFICAR QUE EL ELEMENTO EXISTE ANTES DE AÑADIR EVENT LISTENER
     const agencySelect = document.getElementById('agency-filtro');
