@@ -10,8 +10,7 @@ $xl: 1100px;
 
 }
 #header {
-    background: #871727;
-    opacity: 80%;
+    background: rgba(135, 23, 39, 0.8);
     left: 0;
     width: 100%;
     font-family: 'MontserratAlternates-Medium';
@@ -52,6 +51,7 @@ $xl: 1100px;
         justify-content: flex-end;
         align-items: center;
         gap: 60px;
+        width: 75%;
     }
     .divheader nav ul li a{
         color: white;
@@ -75,7 +75,7 @@ $xl: 1100px;
         width: 100%;
         height: 100% !important;
         display: flex;
-        justify-content: space-evenly;
+        justify-content: space-between;
         align-items: center;
     }
 

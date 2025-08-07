@@ -461,7 +461,7 @@ body {
 }
 
 .dashboard-content {
-    max-width: 1200px;
+    max-width: 80%;
     margin: 20px auto;
     padding: 0 20px;
 }
@@ -499,6 +499,7 @@ body {
 .status-active {
     color: #00a32a;
     font-weight: bold;
+    padding: 10px;
 }
 
 .next-steps {
@@ -967,6 +968,69 @@ body {
     #discountFields,
     #bulkDiscountFields {
         padding: 8px;
+    }
+
+    .calendar-actions{
+        flex-direction: column;
+        align-items: center;
+    }
+    .admin-calendar-container{
+        padding: 0px !important;
+    }
+
+    .login-container{
+        max-width: 70% !important;
+    }
+
+    .modal-content{
+        max-width: 90% !important;
+        width: 100% !important;
+    }
+
+    .admin-calendar-controls button{
+        padding: 10px !important;
+    }
+
+    #agency-calendar-grid{
+        grid-template-columns: repeat(1, 1fr) !important;
+    }
+
+    .conductor-calendar-controls span{
+        text-align: center;
+    }
+
+    .conductor-calendar-controls button{
+        padding: 10px !important;
+    }
+
+    .admin-header h1{
+        text-align: center;
+        font-size: 25px;
+    }
+
+    .actions-bar{
+        flex-direction: column !important;
+    }
+
+    .admin-header{
+        flex-direction: column !important;
+        gap: 10px;
+    }
+
+    .change-password-container{
+        max-width: 90% !important;
+    }
+
+    .calendar-grid{
+        grid-template-columns: repeat(1, 1fr);
+    }
+
+    #admin-calendar-grid{
+        grid-template-columns: repeat(1, 1fr) !important;
+    }
+
+    .admin-step-indicator{
+        flex-direction: column !important;
     }
 }
 
@@ -2053,6 +2117,14 @@ body {
 @media (max-width: 768px) {
     .reports-management {
         padding: 10px;
+    }
+    .user-info{
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .dashboard-header{
+        text-align: center;
     }
 
     .reports-header {

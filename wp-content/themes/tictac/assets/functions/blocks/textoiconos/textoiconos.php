@@ -268,7 +268,7 @@ function textoiconos($block)
 
                             <?php if ($layout_alternativo) : ?>
                                 <?php if ($icono['titulo_icono']): ?>
-                                    <h3 class="icono-titulo"><?= $icono['titulo_icono'] ?></h3>
+                                    <div class="icono-titulo"><?= $icono['titulo_icono'] ?></div>
                                 <?php endif; ?>
 
                                 <?php if ($icono['icono']): ?>
@@ -289,7 +289,7 @@ function textoiconos($block)
 
                                 <div class="icono-contenido">
                                     <?php if ($icono['titulo_icono']): ?>
-                                        <h3 class="icono-titulo"><?= $icono['titulo_icono'] ?></h3>
+                                        <div class="icono-titulo"><?= $icono['titulo_icono'] ?></div>
                                     <?php endif; ?>
 
                                     <?php if ($icono['parrafo_icono']): ?>

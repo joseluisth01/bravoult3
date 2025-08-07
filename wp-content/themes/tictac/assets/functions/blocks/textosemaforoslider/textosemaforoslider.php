@@ -371,7 +371,7 @@ function textosemaforoslider($block)
                     <?php foreach ($slides as $slide_index => $slide) : ?>
                         <div class="textosemaforoslider-slide" data-slide="<?= $slide_index ?>">
                             <?php if ($slide['titulo_slide']): ?>
-                                <h3 class="slide-titulo"><?= $slide['titulo_slide'] ?></h3>
+                                <p class="slide-titulo"><?= $slide['titulo_slide'] ?></p>
                             <?php endif; ?>
 
                             <?php if ($slide['pasos_semaforo']) : ?>
@@ -479,8 +479,8 @@ function textosemaforoslider($block)
         }
 
         .slide-titulo {
-            color: #DB7461;
-            font-size: 30px;
+            color: #DB7461 !important;
+            font-size: 30px !important;
             margin-bottom: 50px;
             margin-top: 30px;
             text-align: center;

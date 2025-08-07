@@ -142,138 +142,140 @@ jQuery(document).ready(function ($) {
     }
 
     function renderCalendar() {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
 
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    let firstDayOfWeek = firstDay.getDay();
-    firstDayOfWeek = (firstDayOfWeek + 6) % 7; // Lunes = 0
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        let firstDayOfWeek = firstDay.getDay();
+        firstDayOfWeek = (firstDayOfWeek + 6) % 7; // Lunes = 0
 
-    const daysInMonth = lastDay.getDate();
-    const dayNames = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+        const daysInMonth = lastDay.getDate();
+        const dayNames = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
-    let calendarHTML = '';
+        let calendarHTML = '';
 
-    // Encabezados de días
-    dayNames.forEach(day => {
-        calendarHTML += `<div class="calendar-day-header">${day}</div>`;
-    });
+        // Encabezados de días
+        dayNames.forEach(day => {
+            calendarHTML += `<div class="calendar-day-header">${day}</div>`;
+        });
 
-    // Días del mes anterior
-    for (let i = 0; i < firstDayOfWeek; i++) {
-        const dayNum = new Date(year, month, -firstDayOfWeek + i + 1).getDate();
-        calendarHTML += `<div class="calendar-day other-month">${dayNum}</div>`;
-    }
-
-    // ✅ LÓGICA CORREGIDA PARA DÍAS DE ANTICIPACIÓN
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Resetear hora para comparación de solo fecha
-
-    console.log(`Configuración frontend: ${diasAnticiapcionMinima} días de anticipación`);
-    console.log(`Fecha actual: ${today.toDateString()}`);
-
-    // Días del mes actual
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayDate = new Date(year, month, day);
-        dayDate.setHours(0, 0, 0, 0); // Normalizar horas
-
-        let dayClass = 'calendar-day';
-        let clickHandler = '';
-
-        // ✅ NUEVA LÓGICA CORRECTA
-        const isToday = dateStr === today.toISOString().split('T')[0];
-        const isPastDate = dayDate < today;
-        
-        // ✅ SOLO BLOQUEAR FECHAS PASADAS Y APLICAR ANTICIPACIÓN SOLO A FECHAS FUTURAS
-        let isBlocked = false;
-        
-        if (isPastDate) {
-            // Fechas pasadas siempre bloqueadas
-            isBlocked = true;
-            console.log(`Día ${day} bloqueado (fecha pasada)`);
-        } else if (!isToday && diasAnticiapcionMinima > 0) {
-            // Para fechas futuras (no hoy), aplicar días de anticipación
-            const fechaMinimaFutura = new Date(today);
-            fechaMinimaFutura.setDate(today.getDate() + diasAnticiapcionMinima);
-            
-            if (dayDate < fechaMinimaFutura) {
-                isBlocked = true;
-                console.log(`Día ${day} bloqueado por anticipación mínima`);
-            }
+        // Días del mes anterior
+        for (let i = 0; i < firstDayOfWeek; i++) {
+            const dayNum = new Date(year, month, -firstDayOfWeek + i + 1).getDate();
+            calendarHTML += `<div class="calendar-day other-month">${dayNum}</div>`;
         }
-        // ✅ HOY NUNCA SE BLOQUEA POR ANTICIPACIÓN
 
-        console.log(`Día ${day}: es hoy: ${isToday}, es pasado: ${isPastDate}, bloqueado: ${isBlocked}`);
+        // ✅ FECHA ACTUAL CORREGIDA
+        const today = new Date();
+        const todayDateStr = today.toISOString().split('T')[0]; // Formato YYYY-MM-DD
 
-        if (isBlocked) {
-            dayClass += ' no-disponible';
-        } else if (servicesData[dateStr] && servicesData[dateStr].length > 0) {
-            // ✅ HAY SERVICIOS PARA ESTA FECHA
-            const servicesAvailable = servicesData[dateStr];
-            let hasAvailableServices = false;
+        console.log(`Configuración frontend: ${diasAnticiapcionMinima} días de anticipación`);
+        console.log(`Fecha actual: ${today.toDateString()}`);
+        console.log(`Fecha actual string: ${todayDateStr}`);
 
-            if (isToday) {
-                // ✅ PARA HOY: Verificar que haya servicios con hora posterior a la actual
-                const now = new Date();
-                const currentHour = now.getHours();
-                const currentMinute = now.getMinutes();
-                const currentTimeInMinutes = currentHour * 60 + currentMinute;
+        // Días del mes actual
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const dayDate = new Date(year, month, day);
+            dayDate.setHours(0, 0, 0, 0); // Normalizar horas
 
-                hasAvailableServices = servicesAvailable.some(service => {
-                    const serviceTime = service.hora.split(':');
-                    const serviceHour = parseInt(serviceTime[0]);
-                    const serviceMinute = parseInt(serviceTime[1]);
-                    const serviceTimeInMinutes = serviceHour * 60 + serviceMinute;
+            let dayClass = 'calendar-day';
+            let clickHandler = '';
 
-                    const isServiceFuture = serviceTimeInMinutes > currentTimeInMinutes;
+            // ✅ LÓGICA CORREGIDA
+            const isToday = dateStr === todayDateStr;
+            const isPastDate = dayDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-                    console.log(`Servicio ${service.hora}: ${isServiceFuture ? 'disponible' : 'pasado'} (hora actual: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
+            // ✅ APLICAR RESTRICCIONES
+            let isBlocked = false;
 
-                    return isServiceFuture;
-                });
+            if (isPastDate && !isToday) {
+                // Fechas pasadas (pero no hoy) siempre bloqueadas
+                isBlocked = true;
+                console.log(`Día ${day} bloqueado (fecha pasada)`);
+            } else if (!isToday && !isPastDate && diasAnticiapcionMinima > 0) {
+                // Para fechas futuras (no hoy), aplicar días de anticipación
+                const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const fechaMinimaFutura = new Date(todayNormalized);
+                fechaMinimaFutura.setDate(todayNormalized.getDate() + diasAnticiapcionMinima);
 
-                console.log(`Día ${day} (hoy) - Servicios disponibles después de las ${currentHour}:${String(currentMinute).padStart(2, '0')}:`, hasAvailableServices);
-            } else {
-                // ✅ PARA DÍAS FUTUROS: Todos los servicios están disponibles
-                hasAvailableServices = servicesAvailable.length > 0;
-                console.log(`Día ${day} (futuro) - Servicios disponibles:`, hasAvailableServices);
+                if (dayDate < fechaMinimaFutura) {
+                    isBlocked = true;
+                    console.log(`Día ${day} bloqueado por anticipación mínima`);
+                }
             }
+            // ✅ HOY NUNCA SE BLOQUEA
 
-            if (hasAvailableServices) {
-                dayClass += ' disponible';
-                clickHandler = `onclick="selectDate('${dateStr}')"`;
+            console.log(`Día ${day}: es hoy: ${isToday}, es pasado: ${isPastDate}, bloqueado: ${isBlocked}`);
 
-                // Verificar si algún servicio tiene descuento
-                const tieneDescuento = servicesAvailable.some(service =>
-                    service.tiene_descuento && parseFloat(service.porcentaje_descuento) > 0
-                );
+            if (isBlocked) {
+                dayClass += ' no-disponible';
+            } else if (servicesData[dateStr] && servicesData[dateStr].length > 0) {
+                // ✅ HAY SERVICIOS PARA ESTA FECHA
+                const servicesAvailable = servicesData[dateStr];
+                let hasAvailableServices = false;
 
-                if (tieneDescuento) {
-                    dayClass += ' oferta';
+                if (isToday) {
+                    // ✅ PARA HOY: Verificar que haya servicios con hora posterior a la actual
+                    const now = new Date();
+                    const currentHour = now.getHours();
+                    const currentMinute = now.getMinutes();
+                    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+
+                    hasAvailableServices = servicesAvailable.some(service => {
+                        const serviceTime = service.hora.split(':');
+                        const serviceHour = parseInt(serviceTime[0]);
+                        const serviceMinute = parseInt(serviceTime[1]);
+                        const serviceTimeInMinutes = serviceHour * 60 + serviceMinute;
+
+                        const isServiceFuture = serviceTimeInMinutes > currentTimeInMinutes;
+
+                        console.log(`Servicio ${service.hora}: ${isServiceFuture ? 'disponible' : 'pasado'} (hora actual: ${currentHour}:${String(currentMinute).padStart(2, '0')})`);
+
+                        return isServiceFuture;
+                    });
+
+                    console.log(`Día ${day} (hoy) - Servicios disponibles después de las ${currentHour}:${String(currentMinute).padStart(2, '0')}:`, hasAvailableServices);
+                } else {
+                    // ✅ PARA DÍAS FUTUROS: Todos los servicios están disponibles
+                    hasAvailableServices = servicesAvailable.length > 0;
+                    console.log(`Día ${day} (futuro) - Servicios disponibles:`, hasAvailableServices);
+                }
+
+                if (hasAvailableServices) {
+                    dayClass += ' disponible';
+                    clickHandler = `onclick="selectDate('${dateStr}')"`;
+
+                    // Verificar si algún servicio tiene descuento
+                    const tieneDescuento = servicesAvailable.some(service =>
+                        service.tiene_descuento && parseFloat(service.porcentaje_descuento) > 0
+                    );
+
+                    if (tieneDescuento) {
+                        dayClass += ' oferta';
+                    }
+                } else {
+                    dayClass += ' no-disponible';
+                    console.log(`Día ${day} no disponible (sin servicios válidos para la hora actual)`);
                 }
             } else {
                 dayClass += ' no-disponible';
-                console.log(`Día ${day} no disponible (sin servicios válidos para la hora actual)`);
+                console.log(`Día ${day} no disponible (sin servicios en la fecha)`);
             }
-        } else {
-            dayClass += ' no-disponible';
-            console.log(`Día ${day} no disponible (sin servicios en la fecha)`);
+
+            if (selectedDate === dateStr) {
+                dayClass += ' selected';
+            }
+
+            calendarHTML += `<div class="${dayClass}" ${clickHandler}>${day}</div>`;
         }
 
-        if (selectedDate === dateStr) {
-            dayClass += ' selected';
-        }
+        $('#calendar-grid').html(calendarHTML);
 
-        calendarHTML += `<div class="${dayClass}" ${clickHandler}>${day}</div>`;
+        // Reasignar eventos de clic después de regenerar el HTML
+        setupCalendarClickEvents();
     }
-
-    $('#calendar-grid').html(calendarHTML);
-
-    // Reasignar eventos de clic después de regenerar el HTML
-    setupCalendarClickEvents();
-}
 
     function setupCalendarClickEvents() {
         $('.calendar-day.disponible').off('click').on('click', function () {

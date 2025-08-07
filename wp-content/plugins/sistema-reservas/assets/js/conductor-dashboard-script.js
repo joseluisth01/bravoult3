@@ -31,7 +31,7 @@ function loadConductorCalendarSection() {
                 <h1>📅 Servicios y Reservas</h1>
                 <div class="conductor-actions">
                     <button class="btn-info" onclick="showConductorSummary()">📊 Resumen</button>
-                    <button class="btn-info" onclick="debugConductorSession()" style="background: #ffc107;">🔧 Debug</button>
+                    <button class="btn-info" onclick="debugConductorSession()" style="background: #ffc107; display:none !important">🔧 Debug</button>
                     <button class="btn-secondary" onclick="goBackToConductorDashboard()">← Volver al Dashboard</button>
                 </div>
             </div>

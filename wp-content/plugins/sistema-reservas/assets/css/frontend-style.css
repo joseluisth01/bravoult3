@@ -99,6 +99,7 @@
     font-weight: bold;
     font-size: 16px;
     border-radius: 0px;
+    margin-bottom: 5px;
 }
 
 .calendar-day {
@@ -213,7 +214,7 @@
 /* === PASO 2: PERSONAS === */
 .persons-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(48%, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(46%, 1fr));
     gap: 20px;
     margin-bottom: 20px;
 }
