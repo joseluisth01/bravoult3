@@ -2281,14 +2281,10 @@ function loadReportsSection() {
 function downloadPDFReport() {
     console.log('🎫 Iniciando descarga de PDF...');
 
-    // ✅ CREAR NONCE USANDO FUNCIÓN DE WORDPRESS
-    const wpNonce = typeof dashboard_vars !== 'undefined' 
-        ? dashboard_vars.nonce 
-        : document.querySelector('meta[name="csrf-token"]')?.content || '';
+    // ✅ USAR EL NONCE CORRECTO
+    const wpNonce = reservasAjax.nonce; // Usar directamente el nonce de reservasAjax
 
-    const ajaxUrl = typeof dashboard_vars !== 'undefined' 
-        ? dashboard_vars.ajax_url 
-        : (typeof ajaxurl !== 'undefined' ? ajaxurl : '/wp-admin/admin-ajax.php');
+    const ajaxUrl = reservasAjax.ajax_url;
 
     const filtros = {
         fecha_inicio: document.getElementById('fecha-inicio').value,
@@ -2296,7 +2292,7 @@ function downloadPDFReport() {
         tipo_fecha: document.getElementById('tipo-fecha').value,
         estado_filtro: document.getElementById('estado-filtro').value,
         agency_filter: document.getElementById('agency-filtro').value,
-        nonce: wpNonce
+        nonce: wpNonce // ✅ USAR EL NONCE CORRECTO
     };
 
     console.log('📋 Filtros capturados:', filtros);
@@ -2310,7 +2306,8 @@ function downloadPDFReport() {
     }
 
     if (!wpNonce) {
-        console.warn('⚠️ Nonce no disponible, continuando sin él');
+        alert('Error de seguridad: Token no disponible');
+        return;
     }
 
     // Validar formulario
