@@ -1976,11 +1976,11 @@ function showConfigurationNotification(message, type) {
 
 
 function loadReportsSection() {
-        console.log('=== VARIABLES AJAX DISPONIBLES ===');
+    console.log('=== VARIABLES AJAX DISPONIBLES ===');
     console.log('dashboard_vars:', typeof dashboard_vars !== 'undefined' ? dashboard_vars : 'NO DEFINIDO');
     console.log('ajaxurl:', typeof ajaxurl !== 'undefined' ? ajaxurl : 'NO DEFINIDO');
     console.log('reservas_ajax:', typeof reservas_ajax !== 'undefined' ? reservas_ajax : 'NO DEFINIDO');
-  
+
 
     document.body.innerHTML = `
         <div class="reports-management">
@@ -2043,10 +2043,15 @@ function loadReportsSection() {
                                     <button class="btn-primary" onclick="loadReservationsByDateWithFilters()">🔍 Aplicar Filtros</button>
                                 </div>
                                 <div class="filter-group">
-                                    <button id="download-pdf-report" class="btn btn-success" style="margin-left: 10px;">
-                                        📄 Descargar PDF
-                                    </button>
-                                </div>
+        <button id="download-pdf-report" class="btn btn-pdf">
+            <span class="btn-icon">📄</span>
+            <span class="btn-text">Descargar PDF</span>
+            <span class="btn-loading" style="display: none;">
+                <span class="spinner"></span>
+                Generando...
+            </span>
+        </button>
+    </div>
                             </div>
                         </div>
                         
@@ -2181,6 +2186,125 @@ function loadReportsSection() {
             gap: 20px;
             align-items: end;
         }
+
+        .btn-pdf {
+        background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        color: white;
+        border: none;
+        padding: 9px 20px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+        position: relative;
+        overflow: hidden;
+        min-width: 160px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .btn-pdf:hover {
+        background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+        box-shadow: 0 6px 16px rgba(231, 76, 60, 0.4);
+        transform: translateY(-2px);
+    }
+    
+    .btn-pdf:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+    }
+    
+    .btn-pdf:disabled {
+        background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: 0 2px 8px rgba(149, 165, 166, 0.2);
+    }
+    
+    .btn-pdf .btn-icon {
+        font-size: 16px;
+        transition: transform 0.3s ease;
+    }
+    
+    .btn-pdf:hover .btn-icon {
+        transform: scale(1.1);
+    }
+    
+    .btn-pdf .btn-text {
+        transition: opacity 0.3s ease;
+    }
+    
+    .btn-pdf .btn-loading {
+        position: absolute;
+        left: 0;
+        right: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .btn-pdf.loading .btn-text {
+        opacity: 0;
+    }
+    
+    .btn-pdf.loading .btn-loading {
+        opacity: 1;
+        display: flex !important;
+    }
+    
+    /* Spinner animado */
+    .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top: 2px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Efecto de ondas al hacer clic */
+    .btn-pdf::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+    }
+    
+    .btn-pdf:active::before {
+        width: 300px;
+        height: 300px;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .btn-pdf {
+            padding: 10px 16px;
+            font-size: 13px;
+            min-width: 140px;
+        }
+        
+        .btn-pdf .btn-icon {
+            font-size: 14px;
+        }
+    }
         
         .filter-group {
             display: flex;
@@ -2270,10 +2394,6 @@ function loadReportsSection() {
         loadReservationsByDateWithFilters();
     });
 
-    // Añadir event listener para el botón PDF
-    document.getElementById('download-pdf-report').addEventListener('click', function () {
-        downloadPDFReport();
-    });
 
 
 }
@@ -2281,9 +2401,7 @@ function loadReportsSection() {
 function downloadPDFReport() {
     console.log('🎫 Iniciando descarga de PDF...');
 
-    // ✅ USAR EL NONCE CORRECTO
-    const wpNonce = reservasAjax.nonce; // Usar directamente el nonce de reservasAjax
-
+    const wpNonce = reservasAjax.nonce;
     const ajaxUrl = reservasAjax.ajax_url;
 
     const filtros = {
@@ -2292,12 +2410,10 @@ function downloadPDFReport() {
         tipo_fecha: document.getElementById('tipo-fecha').value,
         estado_filtro: document.getElementById('estado-filtro').value,
         agency_filter: document.getElementById('agency-filtro').value,
-        nonce: wpNonce // ✅ USAR EL NONCE CORRECTO
+        nonce: wpNonce
     };
 
     console.log('📋 Filtros capturados:', filtros);
-    console.log('🌐 AJAX URL:', ajaxUrl);
-    console.log('🔐 Nonce:', wpNonce);
 
     // Validar configuración
     if (!ajaxUrl) {
@@ -2316,11 +2432,10 @@ function downloadPDFReport() {
         return;
     }
 
-    // Mostrar loading
+    // ✅ MOSTRAR ESTADO DE CARGA CON ANIMACIÓN
     const button = document.getElementById('download-pdf-report');
-    const originalText = button.innerHTML;
-    button.innerHTML = '⏳ Generando PDF...';
     button.disabled = true;
+    button.classList.add('loading');
 
     // Realizar petición AJAX
     fetch(ajaxUrl, {
@@ -2340,8 +2455,9 @@ function downloadPDFReport() {
     .then(data => {
         console.log('📊 Datos del servidor:', data);
 
-        button.innerHTML = originalText;
+        // ✅ RESTAURAR BOTÓN CON ANIMACIÓN
         button.disabled = false;
+        button.classList.remove('loading');
 
         if (data.success) {
             console.log('✅ PDF generado exitosamente');
@@ -2354,19 +2470,28 @@ function downloadPDFReport() {
             link.click();
             document.body.removeChild(link);
 
-            // Mostrar mensaje de éxito
-            showNotification('PDF generado correctamente', 'success');
+            // ✅ MOSTRAR NOTIFICACIÓN MEJORADA
+            showNotification('✅ PDF generado y descargado correctamente', 'success');
+            
+            // ✅ EFECTO VISUAL DE ÉXITO
+            button.style.background = 'linear-gradient(135deg, #27ae60 0%, #229954 100%)';
+            setTimeout(() => {
+                button.style.background = '';
+            }, 2000);
+            
         } else {
             console.error('❌ Error del servidor:', data.data);
-            showNotification('Error generando PDF: ' + data.data, 'error');
+            showNotification('❌ Error generando PDF: ' + data.data, 'error');
         }
     })
     .catch(error => {
         console.error('❌ Error de conexión:', error);
 
-        button.innerHTML = originalText;
+        // ✅ RESTAURAR BOTÓN EN CASO DE ERROR
         button.disabled = false;
-        showNotification('Error de conexión al generar PDF', 'error');
+        button.classList.remove('loading');
+        
+        showNotification('❌ Error de conexión al generar PDF', 'error');
     });
 }
 
@@ -6615,10 +6740,6 @@ function handleReservaRapidaSuccess(data) {
     // Hacer scroll hacia arriba para ver el mensaje
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // Log para debugging
-    console.log('✅ Reserva rápida completada exitosamente');
-    console.log('Localizador:', data.localizador);
-    console.log('Admin:', data.admin_user);
 }
 
 /**

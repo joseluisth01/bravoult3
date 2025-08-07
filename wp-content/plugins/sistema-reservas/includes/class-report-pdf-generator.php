@@ -439,36 +439,79 @@ class ReservasReportPDFGenerator
     $this->pdf->Cell(0, 10, 'TOTALES', 0, 1, 'L');
     $this->pdf->Ln(5);
     
-    // ✅ CABECERA AJUSTADA PARA PÁGINA DE TOTALES
-    $this->pdf->SetFont('helvetica', 'B', 9);
+    // ✅ CABECERA AJUSTADA PARA QUE QUEPA EN 190mm
+    $this->pdf->SetFont('helvetica', 'B', 8); // ✅ REDUCIR TAMAÑO DE FUENTE
     $this->pdf->SetFillColor(220, 220, 220);
     
-    $this->pdf->Cell(50, 8, 'Origen', 1, 0, 'L', true);         // 50mm
-    $this->pdf->Cell(20, 8, 'Adultos', 1, 0, 'C', true);       // 20mm
-    $this->pdf->Cell(18, 8, 'Niños', 1, 0, 'C', true);         // 18mm
-    $this->pdf->Cell(25, 8, 'Adultos Cord.', 1, 0, 'C', true); // 25mm
-    $this->pdf->Cell(22, 8, 'Niños Cord.', 1, 0, 'C', true);   // 22mm
-    $this->pdf->Cell(25, 8, 'Total Desc.', 1, 0, 'C', true);   // 25mm
-    $this->pdf->Cell(25, 8, 'Importe Total', 1, 0, 'C', true); // 25mm
-    $this->pdf->Cell(15, 8, 'Reservas', 1, 1, 'C', true);      // 15mm
-    // Total: 200mm (pero ajustado para que quepa)
+    // ✅ ANCHOS AJUSTADOS PARA TOTAL: 190mm
+    $this->pdf->Cell(35, 8, 'Origen', 1, 0, 'L', true);          // 35mm
+    $this->pdf->Cell(18, 8, 'Adultos', 1, 0, 'C', true);        // 18mm
+    $this->pdf->Cell(15, 8, 'Niños', 1, 0, 'C', true);          // 15mm
+    $this->pdf->Cell(20, 8, 'Adultos Cord.', 1, 0, 'C', true);  // 20mm
+    $this->pdf->Cell(18, 8, 'Niños Cord.', 1, 0, 'C', true);    // 18mm
+    $this->pdf->Cell(22, 8, 'Total Desc.', 1, 0, 'C', true);    // 22mm
+    $this->pdf->Cell(25, 8, 'Importe Total', 1, 0, 'C', true);  // 25mm
+    $this->pdf->Cell(15, 8, 'Reservas', 1, 1, 'C', true);       // 15mm
+    // Total: 168mm (deja margen)
     
     // Datos por agencia
-    $this->pdf->SetFont('helvetica', '', 8);
+    $this->pdf->SetFont('helvetica', '', 7); // ✅ REDUCIR MÁS EL TAMAÑO DE FUENTE
     
     foreach ($data['totales_agencias'] as $origen => $totales) {
-        // ✅ TRUNCAR NOMBRE DE ORIGEN SI ES MUY LARGO
-        $origen_truncado = strlen($origen) > 25 ? substr($origen, 0, 22) . '...' : $origen;
+        // ✅ TRUNCAR NOMBRE DE ORIGEN PARA QUE QUEPA
+        $origen_truncado = strlen($origen) > 20 ? substr($origen, 0, 17) . '...' : $origen;
         
-        $this->pdf->Cell(50, 6, $origen_truncado, 1, 0, 'L');
-        $this->pdf->Cell(20, 6, number_format($totales['adultos']), 1, 0, 'C');
-        $this->pdf->Cell(18, 6, number_format($totales['ninos']), 1, 0, 'C');
-        $this->pdf->Cell(25, 6, number_format($totales['residentes']), 1, 0, 'C');
-        $this->pdf->Cell(22, 6, number_format($totales['ninos_residentes']), 1, 0, 'C');
-        $this->pdf->Cell(25, 6, '-' . number_format($totales['descuentos'], 2) . '€', 1, 0, 'R');
+        $this->pdf->Cell(35, 6, $origen_truncado, 1, 0, 'L');
+        $this->pdf->Cell(18, 6, number_format($totales['adultos']), 1, 0, 'C');
+        $this->pdf->Cell(15, 6, number_format($totales['ninos']), 1, 0, 'C');
+        $this->pdf->Cell(20, 6, number_format($totales['residentes']), 1, 0, 'C');
+        $this->pdf->Cell(18, 6, number_format($totales['ninos_residentes']), 1, 0, 'C');
+        $this->pdf->Cell(22, 6, '-' . number_format($totales['descuentos'], 2) . '€', 1, 0, 'R');
         $this->pdf->Cell(25, 6, number_format($totales['importe'], 2) . '€', 1, 0, 'R');
         $this->pdf->Cell(15, 6, number_format($totales['count']), 1, 1, 'C');
     }
+    
+    // ✅ AÑADIR TOTAL GENERAL AL FINAL
+    $this->add_grand_total($data['totales_agencias']);
+}
+
+private function add_grand_total($totales_agencias)
+{
+    $gran_total = array(
+        'adultos' => 0,
+        'ninos' => 0,
+        'residentes' => 0,
+        'ninos_residentes' => 0,
+        'descuentos' => 0,
+        'importe' => 0,
+        'count' => 0
+    );
+    
+    // Sumar todos los totales
+    foreach ($totales_agencias as $totales) {
+        $gran_total['adultos'] += $totales['adultos'];
+        $gran_total['ninos'] += $totales['ninos'];
+        $gran_total['residentes'] += $totales['residentes'];
+        $gran_total['ninos_residentes'] += $totales['ninos_residentes'];
+        $gran_total['descuentos'] += $totales['descuentos'];
+        $gran_total['importe'] += $totales['importe'];
+        $gran_total['count'] += $totales['count'];
+    }
+    
+    $this->pdf->Ln(3);
+    
+    // Línea de total general
+    $this->pdf->SetFont('helvetica', 'B', 9);
+    $this->pdf->SetFillColor(200, 200, 200);
+    
+    $this->pdf->Cell(35, 8, 'TOTAL GENERAL', 1, 0, 'R', true);
+    $this->pdf->Cell(18, 8, number_format($gran_total['adultos']), 1, 0, 'C', true);
+    $this->pdf->Cell(15, 8, number_format($gran_total['ninos']), 1, 0, 'C', true);
+    $this->pdf->Cell(20, 8, number_format($gran_total['residentes']), 1, 0, 'C', true);
+    $this->pdf->Cell(18, 8, number_format($gran_total['ninos_residentes']), 1, 0, 'C', true);
+    $this->pdf->Cell(22, 8, '-' . number_format($gran_total['descuentos'], 2) . '€', 1, 0, 'R', true);
+    $this->pdf->Cell(25, 8, number_format($gran_total['importe'], 2) . '€', 1, 0, 'R', true);
+    $this->pdf->Cell(15, 8, number_format($gran_total['count']), 1, 1, 'C', true);
 }
 
 
