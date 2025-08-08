@@ -2283,12 +2283,19 @@ public function generate_reservations_pdf_report()
     }
 
     try {
+        // ✅ LOGS DETALLADOS PARA DEBUG
+        error_log('=== GENERANDO PDF CON FILTROS ===');
+        error_log('POST data: ' . print_r($_POST, true));
+
         // Obtener filtros aplicados
         $fecha_inicio = sanitize_text_field($_POST['fecha_inicio'] ?? date('Y-m-d'));
         $fecha_fin = sanitize_text_field($_POST['fecha_fin'] ?? date('Y-m-d'));
         $tipo_fecha = sanitize_text_field($_POST['tipo_fecha'] ?? 'servicio');
         $estado_filtro = sanitize_text_field($_POST['estado_filtro'] ?? 'confirmadas');
         $agency_filter = sanitize_text_field($_POST['agency_filter'] ?? 'todas');
+        $selected_schedules = $_POST['selected_schedules'] ?? '';
+
+        error_log('Selected schedules recibido: ' . $selected_schedules);
 
         // Cargar clase generadora de PDF
         if (!class_exists('ReservasReportPDFGenerator')) {
@@ -2302,8 +2309,11 @@ public function generate_reservations_pdf_report()
             'fecha_fin' => $fecha_fin,
             'tipo_fecha' => $tipo_fecha,
             'estado_filtro' => $estado_filtro,
-            'agency_filter' => $agency_filter
+            'agency_filter' => $agency_filter,
+            'selected_schedules' => $selected_schedules // ✅ PASAR TAL COMO SE RECIBE
         );
+
+        error_log('Filtros que se envían al PDF: ' . print_r($filtros, true));
 
         $pdf_path = $pdf_generator->generate_report_pdf($filtros);
 

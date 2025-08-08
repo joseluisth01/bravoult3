@@ -2764,16 +2764,15 @@ function generatePDFWithSelectedSchedules() {
         return;
     }
 
-    // ✅ RECOPILAR HORARIOS SELECCIONADOS CON EL FORMATO CORRECTO
+    // Recopilar horarios seleccionados
     const selectedSchedules = [];
     selectedCheckboxes.forEach(checkbox => {
-        const hora = checkbox.value;
-        const hora_vuelta = checkbox.dataset.horaVuelta || null;
+        console.log('Checkbox value:', checkbox.value);
+        console.log('Checkbox hora_vuelta:', checkbox.dataset.horaVuelta);
         
-        // ✅ LIMPIAR DATOS
         selectedSchedules.push({
-            hora: hora,
-            hora_vuelta: (hora_vuelta && hora_vuelta !== 'null' && hora_vuelta !== '') ? hora_vuelta : null
+            hora: checkbox.value,
+            hora_vuelta: checkbox.dataset.horaVuelta || null
         });
     });
 
@@ -2785,13 +2784,13 @@ function generatePDFWithSelectedSchedules() {
     // Mostrar indicador de carga
     showPDFLoadingIndicator();
 
-    // ✅ AÑADIR HORARIOS SELECCIONADOS A LOS FILTROS
+    // Añadir horarios seleccionados a los filtros
     const finalFilters = {
         ...currentPDFFilters,
-        selected_schedules: JSON.stringify(selectedSchedules) // ✅ ASEGURAR QUE SE ENVÍA COMO STRING
+        selected_schedules: JSON.stringify(selectedSchedules)
     };
 
-    console.log('📤 Filtros finales enviados:', finalFilters);
+    console.log('📤 Filtros finales enviados al servidor:', finalFilters);
 
     // Realizar petición AJAX para generar PDF
     fetch(reservasAjax.ajax_url, {
@@ -2809,7 +2808,7 @@ function generatePDFWithSelectedSchedules() {
         hidePDFLoadingIndicator();
 
         if (data.success) {
-            console.log('✅ PDF generado exitosamente con filtro de horarios');
+            console.log('✅ PDF generado exitosamente');
 
             // Descargar archivo
             const link = document.createElement('a');
@@ -2819,7 +2818,7 @@ function generatePDFWithSelectedSchedules() {
             link.click();
             document.body.removeChild(link);
 
-            showNotification('✅ PDF generado y descargado correctamente con horarios filtrados', 'success');
+            showNotification('✅ PDF generado correctamente con horarios filtrados', 'success');
         } else {
             console.error('❌ Error del servidor:', data.data);
             showNotification('❌ Error generando PDF: ' + data.data, 'error');

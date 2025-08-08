@@ -80,7 +80,7 @@ private function get_report_data($filtros)
     if ($filtros['tipo_fecha'] === 'compra') {
         $where_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
     } else {
-        $where_conditions[] = "r.fecha BETWEEN %s AND %s";
+        $where_conditions[] = "s.fecha BETWEEN %s AND %s";
     }
     $query_params[] = $filtros['fecha_inicio'];
     $query_params[] = $filtros['fecha_fin'];
@@ -114,8 +114,11 @@ private function get_report_data($filtros)
             break;
     }
 
-    // ✅ NUEVO: Filtro por horarios seleccionados - CORREGIDO
+    // ✅ FILTRO POR HORARIOS SELECCIONADOS - COMPLETAMENTE REESCRITO
     if (!empty($filtros['selected_schedules'])) {
+        error_log('=== APLICANDO FILTRO DE HORARIOS ===');
+        error_log('Selected schedules raw: ' . $filtros['selected_schedules']);
+        
         $selected_schedules = json_decode($filtros['selected_schedules'], true);
         
         if (is_array($selected_schedules) && !empty($selected_schedules)) {
@@ -123,53 +126,71 @@ private function get_report_data($filtros)
             
             foreach ($selected_schedules as $schedule) {
                 if (!empty($schedule['hora'])) {
-                    // ✅ CORREGIR: Usar TIME() para comparar solo la parte de hora
+                    error_log('Procesando horario: ' . $schedule['hora'] . ' | Vuelta: ' . ($schedule['hora_vuelta'] ?? 'NULL'));
+                    
+                    // Normalizar formato de hora a HH:MM:SS
+                    $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
+                    
                     if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== 'null' && $schedule['hora_vuelta'] !== '00:00:00') {
-                        // Filtrar por hora de ida Y vuelta específicas
-                        $schedule_conditions[] = "(TIME(s.hora) = TIME(%s) AND TIME(s.hora_vuelta) = TIME(%s))";
-                        $query_params[] = $schedule['hora'];
-                        $query_params[] = $schedule['hora_vuelta'];
+                        // Horario con vuelta específica
+                        $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
+                        $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
+                        $query_params[] = $hora_normalizada;
+                        $query_params[] = $vuelta_normalizada;
+                        error_log("Condición con vuelta: s.hora = '$hora_normalizada' AND s.hora_vuelta = '$vuelta_normalizada'");
                     } else {
-                        // Filtrar solo por hora de ida
-                        $schedule_conditions[] = "(TIME(s.hora) = TIME(%s) AND (s.hora_vuelta IS NULL OR s.hora_vuelta = '' OR TIME(s.hora_vuelta) = '00:00:00'))";
-                        $query_params[] = $schedule['hora'];
+                        // Solo horario de ida
+                        $schedule_conditions[] = "(s.hora = %s)";
+                        $query_params[] = $hora_normalizada;
+                        error_log("Condición solo ida: s.hora = '$hora_normalizada'");
                     }
                 }
             }
             
             if (!empty($schedule_conditions)) {
-                $where_conditions[] = '(' . implode(' OR ', $schedule_conditions) . ')';
+                $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
+                $where_conditions[] = $horarios_where;
+                error_log('Condición final de horarios: ' . $horarios_where);
             }
         }
     }
 
     $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
 
-    // ✅ AÑADIR LOG PARA DEBUG
-    error_log('=== PDF QUERY DEBUG ===');
-    error_log('Selected schedules: ' . ($filtros['selected_schedules'] ?? 'No schedules'));
-    error_log('Where clause: ' . $where_clause);
-    error_log('Query params: ' . print_r($query_params, true));
-
-    // Query principal
+    // ✅ QUERY PRINCIPAL SIMPLIFICADO PARA DEBUG
     $query = "SELECT r.*, 
                      s.hora as servicio_hora, 
                      s.hora_vuelta as servicio_hora_vuelta,
+                     s.fecha as servicio_fecha,
                      COALESCE(a.agency_name, 'Web') as origen_reserva,
                      a.inicial_localizador as inicial_agencia
              FROM $table_reservas r
              INNER JOIN $table_servicios s ON r.servicio_id = s.id
              LEFT JOIN $table_agencies a ON r.agency_id = a.id
              $where_clause
-             ORDER BY r.fecha ASC, s.hora ASC, r.agency_id ASC";
+             ORDER BY s.fecha ASC, s.hora ASC, r.agency_id ASC";
+
+    error_log('=== QUERY FINAL ===');
+    error_log('Query: ' . $query);
+    error_log('Params: ' . print_r($query_params, true));
 
     $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
 
-    // ✅ AÑADIR LOG PARA VERIFICAR RESULTADOS
+    // ✅ DEBUG DE RESULTADOS
+    error_log('=== RESULTADOS ===');
     error_log('Total reservas encontradas: ' . count($reservas));
+    
     if (!empty($reservas)) {
-        error_log('Primera reserva - Hora: ' . $reservas[0]->servicio_hora . ', Fecha: ' . $reservas[0]->fecha);
-        error_log('Última reserva - Hora: ' . end($reservas)->servicio_hora . ', Fecha: ' . end($reservas)->fecha);
+        foreach ($reservas as $i => $reserva) {
+            error_log("Reserva $i: Fecha={$reserva->servicio_fecha}, Hora={$reserva->servicio_hora}, Vuelta={$reserva->servicio_hora_vuelta}, Localizador={$reserva->localizador}");
+            if ($i >= 4) break; // Solo mostrar las primeras 5
+        }
+    }
+
+    // Verificar si hay error SQL
+    if ($wpdb->last_error) {
+        error_log('❌ Error SQL: ' . $wpdb->last_error);
+        throw new Exception('Error en consulta SQL: ' . $wpdb->last_error);
     }
 
     // Agrupar datos
