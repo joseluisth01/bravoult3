@@ -65,100 +65,128 @@ class ReservasReportPDFGenerator
         }
     }
 
-private function get_report_data($filtros)
-{
-    global $wpdb;
-    $table_reservas = $wpdb->prefix . 'reservas_reservas';
-    $table_agencies = $wpdb->prefix . 'reservas_agencies';
-    $table_servicios = $wpdb->prefix . 'reservas_servicios';
+    private function get_report_data($filtros)
+    {
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        $table_agencies = $wpdb->prefix . 'reservas_agencies';
+        $table_servicios = $wpdb->prefix . 'reservas_servicios';
 
-    // Construir condiciones WHERE
-    $where_conditions = array();
-    $query_params = array();
+        // Construir condiciones WHERE
+        $where_conditions = array();
+        $query_params = array();
 
-    // Filtro por tipo de fecha
-    if ($filtros['tipo_fecha'] === 'compra') {
-        $where_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
-    } else {
-        $where_conditions[] = "s.fecha BETWEEN %s AND %s";
-    }
-    $query_params[] = $filtros['fecha_inicio'];
-    $query_params[] = $filtros['fecha_fin'];
+        // Filtro por tipo de fecha
+        if ($filtros['tipo_fecha'] === 'compra') {
+            $where_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
+        } else {
+            $where_conditions[] = "s.fecha BETWEEN %s AND %s";
+        }
+        $query_params[] = $filtros['fecha_inicio'];
+        $query_params[] = $filtros['fecha_fin'];
 
-    // Filtro de estado
-    switch ($filtros['estado_filtro']) {
-        case 'confirmadas':
-            $where_conditions[] = "r.estado = 'confirmada'";
-            break;
-        case 'canceladas':
-            $where_conditions[] = "r.estado = 'cancelada'";
-            break;
-        case 'todas':
-            // No añadir condición
-            break;
-    }
+        // Filtro de estado
+        switch ($filtros['estado_filtro']) {
+            case 'confirmadas':
+                $where_conditions[] = "r.estado = 'confirmada'";
+                break;
+            case 'canceladas':
+                $where_conditions[] = "r.estado = 'cancelada'";
+                break;
+            case 'todas':
+                // No añadir condición
+                break;
+        }
 
-    // Filtro por agencias
-    switch ($filtros['agency_filter']) {
-        case 'sin_agencia':
-            $where_conditions[] = "r.agency_id IS NULL";
-            break;
-        case 'todas':
-            // No añadir condición
-            break;
-        default:
-            if (is_numeric($filtros['agency_filter']) && $filtros['agency_filter'] > 0) {
-                $where_conditions[] = "r.agency_id = %d";
-                $query_params[] = intval($filtros['agency_filter']);
+        // Filtro por agencias
+        switch ($filtros['agency_filter']) {
+            case 'sin_agencia':
+                $where_conditions[] = "r.agency_id IS NULL";
+                break;
+            case 'todas':
+                // No añadir condición
+                break;
+            default:
+                if (is_numeric($filtros['agency_filter']) && $filtros['agency_filter'] > 0) {
+                    $where_conditions[] = "r.agency_id = %d";
+                    $query_params[] = intval($filtros['agency_filter']);
+                }
+                break;
+        }
+
+        // ✅ FILTRO POR HORARIOS SELECCIONADOS - CORREGIDO
+        if (!empty($filtros['selected_schedules'])) {
+            error_log('=== APLICANDO FILTRO DE HORARIOS ===');
+            error_log('Selected schedules raw: ' . $filtros['selected_schedules']);
+
+            // Decodificar JSON - manejar tanto strings escapados como sin escapar
+            $selected_schedules_json = $filtros['selected_schedules'];
+
+            // Si viene con escapes, eliminarlos
+            if (strpos($selected_schedules_json, '\\') !== false) {
+                $selected_schedules_json = stripslashes($selected_schedules_json);
+                error_log('JSON después de stripslashes: ' . $selected_schedules_json);
             }
-            break;
-    }
 
-    // ✅ FILTRO POR HORARIOS SELECCIONADOS - CORREGIDO
-    if (!empty($filtros['selected_schedules'])) {
-        error_log('=== APLICANDO FILTRO DE HORARIOS ===');
-        error_log('Selected schedules raw: ' . $filtros['selected_schedules']);
-        
-        $selected_schedules = json_decode($filtros['selected_schedules'], true);
-        
-        if (is_array($selected_schedules) && !empty($selected_schedules)) {
-            $schedule_conditions = array();
-            
-            foreach ($selected_schedules as $schedule) {
-                if (!empty($schedule['hora'])) {
-                    error_log('Procesando horario: ' . $schedule['hora'] . ' | Vuelta: ' . ($schedule['hora_vuelta'] ?? 'NULL'));
-                    
-                    // Normalizar formato de hora a HH:MM:SS
-                    $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
-                    
-                    if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== 'null' && $schedule['hora_vuelta'] !== '00:00:00') {
-                        // Horario con vuelta específica
-                        $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
-                        $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
-                        $query_params[] = $hora_normalizada;
-                        $query_params[] = $vuelta_normalizada;
-                        error_log("Condición con vuelta: s.hora = '$hora_normalizada' AND s.hora_vuelta = '$vuelta_normalizada'");
-                    } else {
-                        // Solo horario de ida
-                        $schedule_conditions[] = "(s.hora = %s)";
-                        $query_params[] = $hora_normalizada;
-                        error_log("Condición solo ida: s.hora = '$hora_normalizada'");
+            $selected_schedules = json_decode($selected_schedules_json, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                error_log('❌ Error decodificando JSON: ' . json_last_error_msg());
+                error_log('JSON recibido: ' . $selected_schedules_json);
+            } else {
+                error_log('✅ JSON decodificado correctamente. Horarios: ' . print_r($selected_schedules, true));
+            }
+
+            if (is_array($selected_schedules) && !empty($selected_schedules)) {
+                $schedule_conditions = array();
+
+                foreach ($selected_schedules as $schedule) {
+                    if (!empty($schedule['hora'])) {
+                        error_log('Procesando horario: ' . $schedule['hora'] . ' | Vuelta: ' . ($schedule['hora_vuelta'] ?? 'NULL'));
+
+                        // Normalizar formato de hora a HH:MM:SS
+                        $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
+
+                        if (
+                            !empty($schedule['hora_vuelta']) &&
+                            $schedule['hora_vuelta'] !== 'null' &&
+                            $schedule['hora_vuelta'] !== '' &&
+                            $schedule['hora_vuelta'] !== '00:00:00'
+                        ) {
+                            // Horario con vuelta específica
+                            $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
+                            $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
+                            $query_params[] = $hora_normalizada;
+                            $query_params[] = $vuelta_normalizada;
+                            error_log("Condición con vuelta: s.hora = '$hora_normalizada' AND s.hora_vuelta = '$vuelta_normalizada'");
+                        } else {
+                            // Solo horario de ida o cualquier hora_vuelta
+                            $schedule_conditions[] = "(s.hora = %s)";
+                            $query_params[] = $hora_normalizada;
+                            error_log("Condición solo ida: s.hora = '$hora_normalizada'");
+                        }
                     }
                 }
+
+                if (!empty($schedule_conditions)) {
+                    $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
+                    $where_conditions[] = $horarios_where; // ✅ ESTA LÍNEA ES CRUCIAL
+                    error_log('✅ Condición de horarios AÑADIDA al WHERE: ' . $horarios_where);
+                    error_log('✅ Total de condiciones WHERE: ' . count($where_conditions));
+                } else {
+                    error_log('⚠️ No se generaron condiciones de horarios');
+                }
+            } else {
+                error_log('⚠️ selected_schedules no es un array válido o está vacío');
             }
-            
-            if (!empty($schedule_conditions)) {
-                $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
-                $where_conditions[] = $horarios_where; // ✅ AQUÍ ESTABA EL ERROR - AHORA SÍ SE AÑADE
-                error_log('Condición final de horarios: ' . $horarios_where);
-            }
+        } else {
+            error_log('ℹ️ No hay filtro de horarios seleccionados');
         }
-    }
 
-    $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
+        $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
 
-    // Query principal
-    $query = "SELECT r.*, 
+        // Query principal
+        $query = "SELECT r.*, 
                      s.hora as servicio_hora, 
                      s.hora_vuelta as servicio_hora_vuelta,
                      s.fecha as servicio_fecha,
@@ -170,39 +198,83 @@ private function get_report_data($filtros)
              $where_clause
              ORDER BY s.fecha ASC, s.hora ASC, r.agency_id ASC";
 
-    error_log('=== QUERY FINAL ===');
-    error_log('Query: ' . $query);
-    error_log('Params: ' . print_r($query_params, true));
+        error_log('=== QUERY FINAL ===');
+        error_log('Query: ' . $query);
+        error_log('Params: ' . print_r($query_params, true));
 
-    $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
+        $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
 
-    // Debug de resultados
-    error_log('=== RESULTADOS ===');
-    error_log('Total reservas encontradas: ' . count($reservas));
-    
-    if (!empty($reservas)) {
-        foreach ($reservas as $i => $reserva) {
-            error_log("Reserva $i: Fecha={$reserva->servicio_fecha}, Hora={$reserva->servicio_hora}, Vuelta={$reserva->servicio_hora_vuelta}, Localizador={$reserva->localizador}");
-            if ($i >= 4) break; // Solo mostrar las primeras 5
+        // Debug de resultados
+        error_log('=== RESULTADOS ===');
+        error_log('Total reservas encontradas: ' . count($reservas));
+
+        if (!empty($reservas)) {
+            foreach ($reservas as $i => $reserva) {
+                error_log("Reserva $i: Fecha={$reserva->servicio_fecha}, Hora={$reserva->servicio_hora}, Vuelta={$reserva->servicio_hora_vuelta}, Localizador={$reserva->localizador}");
+                if ($i >= 4) break; // Solo mostrar las primeras 5
+            }
         }
+
+        // Verificar si hay error SQL
+        if ($wpdb->last_error) {
+            error_log('❌ Error SQL: ' . $wpdb->last_error);
+            throw new Exception('Error en consulta SQL: ' . $wpdb->last_error);
+        }
+
+        // ✅ VERIFICAR QUE TODAS LAS RESERVAS COINCIDAN CON LOS HORARIOS SELECCIONADOS
+        if (!empty($filtros['selected_schedules'])) {
+            $selected_schedules = json_decode($filtros['selected_schedules'], true);
+            if (is_array($selected_schedules) && !empty($selected_schedules)) {
+                $filtered_reservas = array();
+
+                foreach ($reservas as $reserva) {
+                    $should_include = false;
+
+                    foreach ($selected_schedules as $schedule) {
+                        if (empty($schedule['hora'])) continue;
+
+                        $hora_filtro = date('H:i:s', strtotime($schedule['hora']));
+                        $hora_reserva = $reserva->servicio_hora;
+
+                        if ($hora_filtro === $hora_reserva) {
+                            // Si hay hora de vuelta específica, verificar también
+                            if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== 'null' && $schedule['hora_vuelta'] !== '00:00:00') {
+                                $vuelta_filtro = date('H:i:s', strtotime($schedule['hora_vuelta']));
+                                $vuelta_reserva = $reserva->servicio_hora_vuelta;
+
+                                if ($vuelta_filtro === $vuelta_reserva) {
+                                    $should_include = true;
+                                    break;
+                                }
+                            } else {
+                                // Solo verificar hora de ida
+                                $should_include = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($should_include) {
+                        $filtered_reservas[] = $reserva;
+                    }
+                }
+
+                $reservas = $filtered_reservas;
+                error_log('=== FILTRADO ADICIONAL ===');
+                error_log('Reservas después del filtro adicional: ' . count($reservas));
+            }
+        }
+
+        // Agrupar datos
+        $reservas_agrupadas = $this->group_reservations($reservas);
+        $totales_agencias = $this->calculate_agency_totals($reservas);
+
+        return array(
+            'reservas_agrupadas' => $reservas_agrupadas,
+            'totales_agencias' => $totales_agencias,
+            'filtros' => $filtros
+        );
     }
-
-    // Verificar si hay error SQL
-    if ($wpdb->last_error) {
-        error_log('❌ Error SQL: ' . $wpdb->last_error);
-        throw new Exception('Error en consulta SQL: ' . $wpdb->last_error);
-    }
-
-    // Agrupar datos
-    $reservas_agrupadas = $this->group_reservations($reservas);
-    $totales_agencias = $this->calculate_agency_totals($reservas);
-
-    return array(
-        'reservas_agrupadas' => $reservas_agrupadas,
-        'totales_agencias' => $totales_agencias,
-        'filtros' => $filtros
-    );
-}
 
     private function group_reservations($reservas)
     {
@@ -252,18 +324,18 @@ private function get_report_data($filtros)
         return $grouped;
     }
 
-private function get_turno_name($hora, $hora_vuelta)
-{
-    // ✅ ASEGURAR QUE SOLO TOMAMOS LA PARTE DE HORA (HH:MM)
-    $hora_formato = date('H:i', strtotime($hora));
+    private function get_turno_name($hora, $hora_vuelta)
+    {
+        // ✅ ASEGURAR QUE SOLO TOMAMOS LA PARTE DE HORA (HH:MM)
+        $hora_formato = date('H:i', strtotime($hora));
 
-    if ($hora_vuelta && $hora_vuelta !== '00:00:00' && !empty($hora_vuelta)) {
-        $vuelta_formato = date('H:i', strtotime($hora_vuelta));
-        return "Turno de $hora_formato a $vuelta_formato";
-    } else {
-        return "Turno de $hora_formato";
+        if ($hora_vuelta && $hora_vuelta !== '00:00:00' && !empty($hora_vuelta)) {
+            $vuelta_formato = date('H:i', strtotime($hora_vuelta));
+            return "Turno de $hora_formato a $vuelta_formato";
+        } else {
+            return "Turno de $hora_formato";
+        }
     }
-}
 
     private function get_origen_name($reserva)
     {
@@ -310,57 +382,57 @@ private function get_turno_name($hora, $hora_vuelta)
     }
 
     private function add_header($filtros)
-{
-    // Título principal
-    $this->pdf->SetFont('helvetica', 'B', 16);
-    $this->pdf->Cell(0, 10, 'Listado de Reservas', 0, 1, 'C');
-    $this->pdf->Ln(5);
+    {
+        // Título principal
+        $this->pdf->SetFont('helvetica', 'B', 16);
+        $this->pdf->Cell(0, 10, 'Listado de Reservas', 0, 1, 'C');
+        $this->pdf->Ln(5);
 
-    // Período
-    $fecha_inicio_formateada = date('d/m/Y', strtotime($filtros['fecha_inicio']));
-    $fecha_fin_formateada = date('d/m/Y', strtotime($filtros['fecha_fin']));
+        // Período
+        $fecha_inicio_formateada = date('d/m/Y', strtotime($filtros['fecha_inicio']));
+        $fecha_fin_formateada = date('d/m/Y', strtotime($filtros['fecha_fin']));
 
-    $this->pdf->SetFont('helvetica', '', 12);
-    $this->pdf->Cell(0, 8, "Período: $fecha_inicio_formateada - $fecha_fin_formateada", 0, 1, 'C');
+        $this->pdf->SetFont('helvetica', '', 12);
+        $this->pdf->Cell(0, 8, "Período: $fecha_inicio_formateada - $fecha_fin_formateada", 0, 1, 'C');
 
-    // Filtros aplicados
-    $this->pdf->SetFont('helvetica', '', 10);
-    $filtros_texto = array();
-    $filtros_texto[] = "Tipo fecha: " . ($filtros['tipo_fecha'] === 'compra' ? 'Compra' : 'Servicio');
-    $filtros_texto[] = "Estado: " . ucfirst($filtros['estado_filtro']);
-    
-    if ($filtros['agency_filter'] !== 'todas') {
-        $filtros_texto[] = "Agencia: " . $filtros['agency_filter'];
-    }
+        // Filtros aplicados
+        $this->pdf->SetFont('helvetica', '', 10);
+        $filtros_texto = array();
+        $filtros_texto[] = "Tipo fecha: " . ($filtros['tipo_fecha'] === 'compra' ? 'Compra' : 'Servicio');
+        $filtros_texto[] = "Estado: " . ucfirst($filtros['estado_filtro']);
 
-    // ✅ MOSTRAR HORARIOS FILTRADOS
-    if (!empty($filtros['selected_schedules'])) {
-        $selected_schedules = json_decode($filtros['selected_schedules'], true);
-        if (is_array($selected_schedules) && !empty($selected_schedules)) {
-            $horarios_texto = array();
-            foreach ($selected_schedules as $schedule) {
-                if (!empty($schedule['hora'])) {
-                    $hora_formato = date('H:i', strtotime($schedule['hora']));
-                    if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== '00:00:00') {
-                        $vuelta_formato = date('H:i', strtotime($schedule['hora_vuelta']));
-                        $horarios_texto[] = "$hora_formato-$vuelta_formato";
-                    } else {
-                        $horarios_texto[] = $hora_formato;
+        if ($filtros['agency_filter'] !== 'todas') {
+            $filtros_texto[] = "Agencia: " . $filtros['agency_filter'];
+        }
+
+        // ✅ MOSTRAR HORARIOS FILTRADOS
+        if (!empty($filtros['selected_schedules'])) {
+            $selected_schedules = json_decode($filtros['selected_schedules'], true);
+            if (is_array($selected_schedules) && !empty($selected_schedules)) {
+                $horarios_texto = array();
+                foreach ($selected_schedules as $schedule) {
+                    if (!empty($schedule['hora'])) {
+                        $hora_formato = date('H:i', strtotime($schedule['hora']));
+                        if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== '00:00:00') {
+                            $vuelta_formato = date('H:i', strtotime($schedule['hora_vuelta']));
+                            $horarios_texto[] = "$hora_formato-$vuelta_formato";
+                        } else {
+                            $horarios_texto[] = $hora_formato;
+                        }
                     }
                 }
-            }
-            if (!empty($horarios_texto)) {
-                $filtros_texto[] = "Horarios: " . implode(', ', $horarios_texto);
+                if (!empty($horarios_texto)) {
+                    $filtros_texto[] = "Horarios: " . implode(', ', $horarios_texto);
+                }
             }
         }
+
+        $this->pdf->Cell(0, 6, implode(' | ', $filtros_texto), 0, 1, 'C');
+        $this->pdf->Ln(8);
+
+        // Cabecera de tabla
+        $this->add_table_header();
     }
-
-    $this->pdf->Cell(0, 6, implode(' | ', $filtros_texto), 0, 1, 'C');
-    $this->pdf->Ln(8);
-
-    // Cabecera de tabla
-    $this->add_table_header();
-}
 
     private function add_table_header()
     {
@@ -447,65 +519,65 @@ private function get_turno_name($hora, $hora_vuelta)
     }
 
     private function add_origen_section($origen, $datos, &$total_turno)
-{
-    $this->pdf->SetFont('helvetica', '', 8);
-    
-    // ✅ USAR LOS MISMOS ANCHOS QUE EN LA CABECERA
-    // Nombre del origen (ajustado para que quepa en las dos primeras columnas)
-    $this->pdf->Cell(75, 5, '        ' . $origen, 0, 0, 'L'); // 25+50 = 75mm
-    
-    $totales = $datos['totales'];
-    
-    // Datos del origen con los mismos anchos que la cabecera
-    $this->pdf->Cell(18, 5, number_format($totales['adultos']), 1, 0, 'C');
-    $this->pdf->Cell(15, 5, number_format($totales['ninos']), 1, 0, 'C');
-    $this->pdf->Cell(22, 5, number_format($totales['residentes']), 1, 0, 'C');
-    $this->pdf->Cell(20, 5, number_format($totales['ninos_residentes']), 1, 0, 'C');
-    $this->pdf->Cell(20, 5, '-' . number_format($totales['descuentos'], 2) . ' €', 1, 0, 'R');
-    $this->pdf->Cell(20, 5, number_format($totales['importe'], 2) . ' €', 1, 1, 'R');
-    
-    // Mostrar localizadores
-    $localizadores = array();
-    foreach ($datos['reservas'] as $reserva) {
-        $localizadores[] = $reserva->localizador;
-    }
-    
-    if (!empty($localizadores)) {
-        $this->pdf->SetFont('helvetica', '', 7);
-        
-        // Dividir localizadores en chunks para que no se desborde
-        $chunks = array_chunk($localizadores, 6); // Reducir a 6 por línea
-        foreach ($chunks as $chunk) {
-            $this->pdf->Cell(75, 3, '            ' . implode(', ', $chunk), 0, 1, 'L');
+    {
+        $this->pdf->SetFont('helvetica', '', 8);
+
+        // ✅ USAR LOS MISMOS ANCHOS QUE EN LA CABECERA
+        // Nombre del origen (ajustado para que quepa en las dos primeras columnas)
+        $this->pdf->Cell(75, 5, '        ' . $origen, 0, 0, 'L'); // 25+50 = 75mm
+
+        $totales = $datos['totales'];
+
+        // Datos del origen con los mismos anchos que la cabecera
+        $this->pdf->Cell(18, 5, number_format($totales['adultos']), 1, 0, 'C');
+        $this->pdf->Cell(15, 5, number_format($totales['ninos']), 1, 0, 'C');
+        $this->pdf->Cell(22, 5, number_format($totales['residentes']), 1, 0, 'C');
+        $this->pdf->Cell(20, 5, number_format($totales['ninos_residentes']), 1, 0, 'C');
+        $this->pdf->Cell(20, 5, '-' . number_format($totales['descuentos'], 2) . ' €', 1, 0, 'R');
+        $this->pdf->Cell(20, 5, number_format($totales['importe'], 2) . ' €', 1, 1, 'R');
+
+        // Mostrar localizadores
+        $localizadores = array();
+        foreach ($datos['reservas'] as $reserva) {
+            $localizadores[] = $reserva->localizador;
         }
-        
-        // Añadir espacio después de los localizadores
-        $this->pdf->Ln(1);
+
+        if (!empty($localizadores)) {
+            $this->pdf->SetFont('helvetica', '', 7);
+
+            // Dividir localizadores en chunks para que no se desborde
+            $chunks = array_chunk($localizadores, 6); // Reducir a 6 por línea
+            foreach ($chunks as $chunk) {
+                $this->pdf->Cell(75, 3, '            ' . implode(', ', $chunk), 0, 1, 'L');
+            }
+
+            // Añadir espacio después de los localizadores
+            $this->pdf->Ln(1);
+        }
+
+        // Sumar al total del turno
+        $this->add_to_total($total_turno, $totales);
     }
-    
-    // Sumar al total del turno
-    $this->add_to_total($total_turno, $totales);
-}
 
     private function add_subtotal_row($label, $totales, $bold = false)
-{
-    if ($bold) {
-        $this->pdf->SetFont('helvetica', 'B', 9);
-        $this->pdf->SetFillColor(230, 230, 230);
-    } else {
-        $this->pdf->SetFont('helvetica', 'B', 8);
-        $this->pdf->SetFillColor(245, 245, 245);
+    {
+        if ($bold) {
+            $this->pdf->SetFont('helvetica', 'B', 9);
+            $this->pdf->SetFillColor(230, 230, 230);
+        } else {
+            $this->pdf->SetFont('helvetica', 'B', 8);
+            $this->pdf->SetFillColor(245, 245, 245);
+        }
+
+        // ✅ USAR LOS MISMOS ANCHOS
+        $this->pdf->Cell(75, 6, $label, 1, 0, 'R', true);           // 75mm (fecha + servicio)
+        $this->pdf->Cell(18, 6, number_format($totales['adultos']), 1, 0, 'C', true);
+        $this->pdf->Cell(15, 6, number_format($totales['ninos']), 1, 0, 'C', true);
+        $this->pdf->Cell(22, 6, number_format($totales['residentes']), 1, 0, 'C', true);
+        $this->pdf->Cell(20, 6, number_format($totales['ninos_residentes']), 1, 0, 'C', true);
+        $this->pdf->Cell(20, 6, '-' . number_format($totales['descuentos'], 2) . '€', 1, 0, 'R', true);
+        $this->pdf->Cell(20, 6, number_format($totales['importe'], 2) . '€', 1, 1, 'R', true);
     }
-    
-    // ✅ USAR LOS MISMOS ANCHOS
-    $this->pdf->Cell(75, 6, $label, 1, 0, 'R', true);           // 75mm (fecha + servicio)
-    $this->pdf->Cell(18, 6, number_format($totales['adultos']), 1, 0, 'C', true);
-    $this->pdf->Cell(15, 6, number_format($totales['ninos']), 1, 0, 'C', true);
-    $this->pdf->Cell(22, 6, number_format($totales['residentes']), 1, 0, 'C', true);
-    $this->pdf->Cell(20, 6, number_format($totales['ninos_residentes']), 1, 0, 'C', true);
-    $this->pdf->Cell(20, 6, '-' . number_format($totales['descuentos'], 2) . '€', 1, 0, 'R', true);
-    $this->pdf->Cell(20, 6, number_format($totales['importe'], 2) . '€', 1, 1, 'R', true);
-}
 
     private function add_to_total(&$total_destino, $datos_origen)
     {
@@ -517,88 +589,86 @@ private function get_turno_name($hora, $hora_vuelta)
     }
 
     private function add_totales_agencias($data)
-{
-    $this->pdf->AddPage();
-    
-    // Título
-    $this->pdf->SetFont('helvetica', 'B', 14);
-    $this->pdf->Cell(0, 10, 'TOTALES', 0, 1, 'L');
-    $this->pdf->Ln(5);
-    
-    // ✅ CABECERA AJUSTADA PARA QUE QUEPA EN 190mm
-    $this->pdf->SetFont('helvetica', 'B', 8); // ✅ REDUCIR TAMAÑO DE FUENTE
-    $this->pdf->SetFillColor(220, 220, 220);
-    
-    // ✅ ANCHOS AJUSTADOS PARA TOTAL: 190mm
-    $this->pdf->Cell(35, 8, 'Origen', 1, 0, 'L', true);          // 35mm
-    $this->pdf->Cell(18, 8, 'Adultos', 1, 0, 'C', true);        // 18mm
-    $this->pdf->Cell(15, 8, 'Niños', 1, 0, 'C', true);          // 15mm
-    $this->pdf->Cell(20, 8, 'Adultos Cord.', 1, 0, 'C', true);  // 20mm
-    $this->pdf->Cell(18, 8, 'Niños Cord.', 1, 0, 'C', true);    // 18mm
-    $this->pdf->Cell(22, 8, 'Total Desc.', 1, 0, 'C', true);    // 22mm
-    $this->pdf->Cell(25, 8, 'Importe Total', 1, 0, 'C', true);  // 25mm
-    $this->pdf->Cell(15, 8, 'Reservas', 1, 1, 'C', true);       // 15mm
-    // Total: 168mm (deja margen)
-    
-    // Datos por agencia
-    $this->pdf->SetFont('helvetica', '', 7); // ✅ REDUCIR MÁS EL TAMAÑO DE FUENTE
-    
-    foreach ($data['totales_agencias'] as $origen => $totales) {
-        // ✅ TRUNCAR NOMBRE DE ORIGEN PARA QUE QUEPA
-        $origen_truncado = strlen($origen) > 20 ? substr($origen, 0, 17) . '...' : $origen;
-        
-        $this->pdf->Cell(35, 6, $origen_truncado, 1, 0, 'L');
-        $this->pdf->Cell(18, 6, number_format($totales['adultos']), 1, 0, 'C');
-        $this->pdf->Cell(15, 6, number_format($totales['ninos']), 1, 0, 'C');
-        $this->pdf->Cell(20, 6, number_format($totales['residentes']), 1, 0, 'C');
-        $this->pdf->Cell(18, 6, number_format($totales['ninos_residentes']), 1, 0, 'C');
-        $this->pdf->Cell(22, 6, '-' . number_format($totales['descuentos'], 2) . '€', 1, 0, 'R');
-        $this->pdf->Cell(25, 6, number_format($totales['importe'], 2) . '€', 1, 0, 'R');
-        $this->pdf->Cell(15, 6, number_format($totales['count']), 1, 1, 'C');
+    {
+        $this->pdf->AddPage();
+
+        // Título
+        $this->pdf->SetFont('helvetica', 'B', 14);
+        $this->pdf->Cell(0, 10, 'TOTALES', 0, 1, 'L');
+        $this->pdf->Ln(5);
+
+        // ✅ CABECERA AJUSTADA PARA QUE QUEPA EN 190mm
+        $this->pdf->SetFont('helvetica', 'B', 8); // ✅ REDUCIR TAMAÑO DE FUENTE
+        $this->pdf->SetFillColor(220, 220, 220);
+
+        // ✅ ANCHOS AJUSTADOS PARA TOTAL: 190mm
+        $this->pdf->Cell(35, 8, 'Origen', 1, 0, 'L', true);          // 35mm
+        $this->pdf->Cell(18, 8, 'Adultos', 1, 0, 'C', true);        // 18mm
+        $this->pdf->Cell(15, 8, 'Niños', 1, 0, 'C', true);          // 15mm
+        $this->pdf->Cell(20, 8, 'Adultos Cord.', 1, 0, 'C', true);  // 20mm
+        $this->pdf->Cell(18, 8, 'Niños Cord.', 1, 0, 'C', true);    // 18mm
+        $this->pdf->Cell(22, 8, 'Total Desc.', 1, 0, 'C', true);    // 22mm
+        $this->pdf->Cell(25, 8, 'Importe Total', 1, 0, 'C', true);  // 25mm
+        $this->pdf->Cell(15, 8, 'Reservas', 1, 1, 'C', true);       // 15mm
+        // Total: 168mm (deja margen)
+
+        // Datos por agencia
+        $this->pdf->SetFont('helvetica', '', 7); // ✅ REDUCIR MÁS EL TAMAÑO DE FUENTE
+
+        foreach ($data['totales_agencias'] as $origen => $totales) {
+            // ✅ TRUNCAR NOMBRE DE ORIGEN PARA QUE QUEPA
+            $origen_truncado = strlen($origen) > 20 ? substr($origen, 0, 17) . '...' : $origen;
+
+            $this->pdf->Cell(35, 6, $origen_truncado, 1, 0, 'L');
+            $this->pdf->Cell(18, 6, number_format($totales['adultos']), 1, 0, 'C');
+            $this->pdf->Cell(15, 6, number_format($totales['ninos']), 1, 0, 'C');
+            $this->pdf->Cell(20, 6, number_format($totales['residentes']), 1, 0, 'C');
+            $this->pdf->Cell(18, 6, number_format($totales['ninos_residentes']), 1, 0, 'C');
+            $this->pdf->Cell(22, 6, '-' . number_format($totales['descuentos'], 2) . '€', 1, 0, 'R');
+            $this->pdf->Cell(25, 6, number_format($totales['importe'], 2) . '€', 1, 0, 'R');
+            $this->pdf->Cell(15, 6, number_format($totales['count']), 1, 1, 'C');
+        }
+
+        // ✅ AÑADIR TOTAL GENERAL AL FINAL
+        $this->add_grand_total($data['totales_agencias']);
     }
-    
-    // ✅ AÑADIR TOTAL GENERAL AL FINAL
-    $this->add_grand_total($data['totales_agencias']);
-}
 
-private function add_grand_total($totales_agencias)
-{
-    $gran_total = array(
-        'adultos' => 0,
-        'ninos' => 0,
-        'residentes' => 0,
-        'ninos_residentes' => 0,
-        'descuentos' => 0,
-        'importe' => 0,
-        'count' => 0
-    );
-    
-    // Sumar todos los totales
-    foreach ($totales_agencias as $totales) {
-        $gran_total['adultos'] += $totales['adultos'];
-        $gran_total['ninos'] += $totales['ninos'];
-        $gran_total['residentes'] += $totales['residentes'];
-        $gran_total['ninos_residentes'] += $totales['ninos_residentes'];
-        $gran_total['descuentos'] += $totales['descuentos'];
-        $gran_total['importe'] += $totales['importe'];
-        $gran_total['count'] += $totales['count'];
+    private function add_grand_total($totales_agencias)
+    {
+        $gran_total = array(
+            'adultos' => 0,
+            'ninos' => 0,
+            'residentes' => 0,
+            'ninos_residentes' => 0,
+            'descuentos' => 0,
+            'importe' => 0,
+            'count' => 0
+        );
+
+        // Sumar todos los totales
+        foreach ($totales_agencias as $totales) {
+            $gran_total['adultos'] += $totales['adultos'];
+            $gran_total['ninos'] += $totales['ninos'];
+            $gran_total['residentes'] += $totales['residentes'];
+            $gran_total['ninos_residentes'] += $totales['ninos_residentes'];
+            $gran_total['descuentos'] += $totales['descuentos'];
+            $gran_total['importe'] += $totales['importe'];
+            $gran_total['count'] += $totales['count'];
+        }
+
+        $this->pdf->Ln(3);
+
+        // Línea de total general
+        $this->pdf->SetFont('helvetica', 'B', 9);
+        $this->pdf->SetFillColor(200, 200, 200);
+
+        $this->pdf->Cell(35, 8, 'TOTAL GENERAL', 1, 0, 'R', true);
+        $this->pdf->Cell(18, 8, number_format($gran_total['adultos']), 1, 0, 'C', true);
+        $this->pdf->Cell(15, 8, number_format($gran_total['ninos']), 1, 0, 'C', true);
+        $this->pdf->Cell(20, 8, number_format($gran_total['residentes']), 1, 0, 'C', true);
+        $this->pdf->Cell(18, 8, number_format($gran_total['ninos_residentes']), 1, 0, 'C', true);
+        $this->pdf->Cell(22, 8, '-' . number_format($gran_total['descuentos'], 2) . '€', 1, 0, 'R', true);
+        $this->pdf->Cell(25, 8, number_format($gran_total['importe'], 2) . '€', 1, 0, 'R', true);
+        $this->pdf->Cell(15, 8, number_format($gran_total['count']), 1, 1, 'C', true);
     }
-    
-    $this->pdf->Ln(3);
-    
-    // Línea de total general
-    $this->pdf->SetFont('helvetica', 'B', 9);
-    $this->pdf->SetFillColor(200, 200, 200);
-    
-    $this->pdf->Cell(35, 8, 'TOTAL GENERAL', 1, 0, 'R', true);
-    $this->pdf->Cell(18, 8, number_format($gran_total['adultos']), 1, 0, 'C', true);
-    $this->pdf->Cell(15, 8, number_format($gran_total['ninos']), 1, 0, 'C', true);
-    $this->pdf->Cell(20, 8, number_format($gran_total['residentes']), 1, 0, 'C', true);
-    $this->pdf->Cell(18, 8, number_format($gran_total['ninos_residentes']), 1, 0, 'C', true);
-    $this->pdf->Cell(22, 8, '-' . number_format($gran_total['descuentos'], 2) . '€', 1, 0, 'R', true);
-    $this->pdf->Cell(25, 8, number_format($gran_total['importe'], 2) . '€', 1, 0, 'R', true);
-    $this->pdf->Cell(15, 8, number_format($gran_total['count']), 1, 1, 'C', true);
-}
-
-
 }
