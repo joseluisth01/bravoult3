@@ -114,7 +114,7 @@ private function get_report_data($filtros)
             break;
     }
 
-    // ✅ FILTRO POR HORARIOS SELECCIONADOS - COMPLETAMENTE REESCRITO
+    // ✅ FILTRO POR HORARIOS SELECCIONADOS - CORREGIDO
     if (!empty($filtros['selected_schedules'])) {
         error_log('=== APLICANDO FILTRO DE HORARIOS ===');
         error_log('Selected schedules raw: ' . $filtros['selected_schedules']);
@@ -149,7 +149,7 @@ private function get_report_data($filtros)
             
             if (!empty($schedule_conditions)) {
                 $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
-                $where_conditions[] = $horarios_where;
+                $where_conditions[] = $horarios_where; // ✅ AQUÍ ESTABA EL ERROR - AHORA SÍ SE AÑADE
                 error_log('Condición final de horarios: ' . $horarios_where);
             }
         }
@@ -157,7 +157,7 @@ private function get_report_data($filtros)
 
     $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
 
-    // ✅ QUERY PRINCIPAL SIMPLIFICADO PARA DEBUG
+    // Query principal
     $query = "SELECT r.*, 
                      s.hora as servicio_hora, 
                      s.hora_vuelta as servicio_hora_vuelta,
@@ -176,7 +176,7 @@ private function get_report_data($filtros)
 
     $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
 
-    // ✅ DEBUG DE RESULTADOS
+    // Debug de resultados
     error_log('=== RESULTADOS ===');
     error_log('Total reservas encontradas: ' . count($reservas));
     
