@@ -2398,8 +2398,11 @@ function loadReportsSection() {
 
 }
 
+let availableSchedulesForPDF = [];
+let currentPDFFilters = {};
+
 function downloadPDFReport() {
-    console.log('🎫 Iniciando descarga de PDF...');
+    console.log('🎯 Iniciando proceso de descarga con filtro de horarios...');
 
     const wpNonce = reservasAjax.nonce;
     const ajaxUrl = reservasAjax.ajax_url;
@@ -2413,87 +2416,427 @@ function downloadPDFReport() {
         nonce: wpNonce
     };
 
-    console.log('📋 Filtros capturados:', filtros);
-
-    // Validar configuración
-    if (!ajaxUrl) {
-        alert('Error de configuración: URL AJAX no disponible');
-        return;
-    }
-
-    if (!wpNonce) {
-        alert('Error de seguridad: Token no disponible');
-        return;
-    }
-
     // Validar formulario
     if (!filtros.fecha_inicio || !filtros.fecha_fin) {
         alert('Por favor, selecciona las fechas de inicio y fin');
         return;
     }
 
-    // ✅ MOSTRAR ESTADO DE CARGA CON ANIMACIÓN
-    const button = document.getElementById('download-pdf-report');
-    button.disabled = true;
-    button.classList.add('loading');
+    // Guardar filtros actuales
+    currentPDFFilters = { ...filtros };
 
-    // Realizar petición AJAX
-    fetch(ajaxUrl, {
+    // Obtener horarios disponibles para el período seleccionado
+    getAvailableSchedulesForPDF(filtros);
+}
+
+/**
+ * Obtener horarios disponibles para el filtro de PDF
+ */
+function getAvailableSchedulesForPDF(filtros) {
+    console.log('📅 Obteniendo horarios disponibles para PDF...');
+
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'get_available_schedules_for_pdf',
+            ...filtros
+        })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                availableSchedulesForPDF = data.data.schedules || [];
+
+                if (availableSchedulesForPDF.length === 0) {
+                    alert('❌ No se encontraron horarios para el período seleccionado');
+                    return;
+                }
+
+                // Mostrar modal de selección de horarios
+                showScheduleSelectionModal(data.data);
+            } else {
+                console.error('❌ Error obteniendo horarios:', data.data);
+                alert('❌ Error obteniendo horarios disponibles: ' + data.data);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error de conexión:', error);
+            alert('❌ Error de conexión al obtener horarios');
+        });
+}
+
+/**
+ * Mostrar modal de selección de horarios
+ */
+function showScheduleSelectionModal(data) {
+    console.log('📋 Mostrando modal de selección de horarios');
+
+    // Crear modal si no existe
+    if (!document.getElementById('scheduleSelectionModal')) {
+        createScheduleSelectionModal();
+    }
+
+    // Llenar contenido del modal
+    const schedulesContainer = document.getElementById('schedules-selection-container');
+    const statsInfo = document.getElementById('schedule-stats-info');
+
+    // Mostrar estadísticas del período
+    const fechaInicioFormat = new Date(currentPDFFilters.fecha_inicio).toLocaleDateString('es-ES');
+    const fechaFinFormat = new Date(currentPDFFilters.fecha_fin).toLocaleDateString('es-ES');
+
+    statsInfo.innerHTML = `
+        <div class="period-info">
+            <h4>📊 Período: ${fechaInicioFormat} - ${fechaFinFormat}</h4>
+            <p><strong>Total servicios encontrados:</strong> ${data.total_services}</p>
+            <p><strong>Días con servicios:</strong> ${data.days_with_services}</p>
+            <p><strong>Horarios diferentes encontrados:</strong> ${availableSchedulesForPDF.length}</p>
+        </div>
+    `;
+
+    // Generar checkboxes para cada horario
+    let schedulesHTML = `
+        <div class="schedules-grid">
+            <div class="schedule-option select-all-option">
+                <label class="schedule-checkbox-label">
+                    <input type="checkbox" id="select-all-schedules" onchange="toggleAllSchedules()">
+                    <span class="schedule-time">📋 Seleccionar Todos los Horarios</span>
+                    <span class="schedule-count">Incluir todos los ${availableSchedulesForPDF.length} horarios</span>
+                </label>
+            </div>
+    `;
+
+    availableSchedulesForPDF.forEach((schedule, index) => {
+        const horaFormatted = schedule.hora.substring(0, 5);
+        const horaVueltaText = schedule.hora_vuelta && schedule.hora_vuelta !== '00:00:00' ?
+            ` (vuelta ${schedule.hora_vuelta.substring(0, 5)})` : '';
+
+        schedulesHTML += `
+            <div class="schedule-option">
+                <label class="schedule-checkbox-label">
+                    <input type="checkbox" class="schedule-checkbox" value="${schedule.hora}" 
+                           data-hora-vuelta="${schedule.hora_vuelta || ''}"
+                           id="schedule-${index}">
+                    <span class="schedule-time">🕐 ${horaFormatted}${horaVueltaText}</span>
+                    <span class="schedule-count">${schedule.count} servicios</span>
+                    <span class="schedule-days">${schedule.days_count} días</span>
+                </label>
+            </div>
+        `;
+    });
+
+    schedulesHTML += `</div>`;
+    schedulesContainer.innerHTML = schedulesHTML;
+
+    // Marcar "Seleccionar todos" por defecto
+    document.getElementById('select-all-schedules').checked = true;
+    toggleAllSchedules();
+
+    // Mostrar modal
+    document.getElementById('scheduleSelectionModal').style.display = 'block';
+}
+
+/**
+ * Crear modal de selección de horarios
+ */
+function createScheduleSelectionModal() {
+    const modalHTML = `
+        <div id="scheduleSelectionModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 700px; max-height: 80vh; overflow-y: auto;">
+                <div class="modal-header" style="position: sticky; top: 0; background: white; z-index: 10; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #0073aa;">⏰ Seleccionar Horarios para PDF</h3>
+                    <span class="close" onclick="closeScheduleSelectionModal()" style="position: absolute; right: 10px; top: 10px; font-size: 24px; cursor: pointer;">&times;</span>
+                </div>
+                
+                <div id="schedule-stats-info" class="stats-info">
+                    <!-- Información del período se cargará aquí -->
+                </div>
+                
+                <div class="modal-body">
+                    <p style="color: #666; margin-bottom: 20px;">
+                        📋 Selecciona qué horarios quieres incluir en el informe PDF. 
+                        Puedes elegir horarios específicos o todos los disponibles.
+                    </p>
+                    
+                    <div id="schedules-selection-container">
+                        <!-- Horarios disponibles se cargarán aquí -->
+                    </div>
+                </div>
+                
+                <div class="modal-footer" style="position: sticky; bottom: 0; background: white; border-top: 1px solid #eee; padding-top: 15px; margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="selection-info">
+                            <span id="selected-count">0 horarios seleccionados</span>
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn-secondary" onclick="closeScheduleSelectionModal()">Cancelar</button>
+                            <button class="btn-primary" onclick="generatePDFWithSelectedSchedules()" id="generate-pdf-btn" disabled>
+                                📄 Generar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+        .schedules-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+        
+        .schedule-option {
+            background: white;
+            border: 2px solid #e1e1e1;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .schedule-option:hover {
+            border-color: #0073aa;
+            box-shadow: 0 2px 4px rgba(0,115,170,0.1);
+        }
+        
+        .select-all-option {
+            background: linear-gradient(135deg, #0073aa 0%, #005177 100%) !important;
+            border-color: #0073aa !important;
+        }
+        
+        .select-all-option .schedule-checkbox-label {
+            color: white !important;
+        }
+        
+        .schedule-checkbox-label {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            cursor: pointer;
+            margin: 0;
+        }
+        
+        .schedule-checkbox-label input[type="checkbox"] {
+            margin-right: 12px;
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+        
+        .schedule-time {
+            font-weight: 600;
+            font-size: 16px;
+            flex: 1;
+        }
+        
+        .schedule-count {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        
+        .schedule-days {
+            background: #f3e5f5;
+            color: #7b1fa2;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .select-all-option .schedule-count {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        
+        .stats-info {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #28a745;
+        }
+        
+        .period-info h4 {
+            margin: 0 0 10px 0;
+            color: #155724;
+        }
+        
+        .period-info p {
+            margin: 5px 0;
+            color: #155724;
+        }
+        
+        .selection-info {
+            font-weight: 600;
+            color: #0073aa;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+        </style>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Añadir event listeners
+    document.addEventListener('change', function (e) {
+        if (e.target.classList.contains('schedule-checkbox')) {
+            updateSelectionCount();
+        }
+    });
+}
+
+/**
+ * Seleccionar/deseleccionar todos los horarios
+ */
+function toggleAllSchedules() {
+    const selectAllCheckbox = document.getElementById('select-all-schedules');
+    const scheduleCheckboxes = document.querySelectorAll('.schedule-checkbox');
+
+    scheduleCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+
+    updateSelectionCount();
+}
+
+/**
+ * Actualizar contador de selección
+ */
+function updateSelectionCount() {
+    const selectedCheckboxes = document.querySelectorAll('.schedule-checkbox:checked');
+    const totalCheckboxes = document.querySelectorAll('.schedule-checkbox');
+    const selectAllCheckbox = document.getElementById('select-all-schedules');
+    const generateBtn = document.getElementById('generate-pdf-btn');
+    const countSpan = document.getElementById('selected-count');
+
+    const selectedCount = selectedCheckboxes.length;
+
+    // Actualizar contador
+    if (selectedCount === 0) {
+        countSpan.textContent = 'Ningún horario seleccionado';
+        countSpan.style.color = '#dc3545';
+        generateBtn.disabled = true;
+    } else if (selectedCount === totalCheckboxes.length) {
+        countSpan.textContent = 'Todos los horarios seleccionados';
+        countSpan.style.color = '#28a745';
+        generateBtn.disabled = false;
+    } else {
+        countSpan.textContent = `${selectedCount} de ${totalCheckboxes.length} horarios seleccionados`;
+        countSpan.style.color = '#0073aa';
+        generateBtn.disabled = false;
+    }
+
+    // Actualizar checkbox "Seleccionar todos"
+    if (selectedCount === totalCheckboxes.length) {
+        selectAllCheckbox.checked = true;
+        selectAllCheckbox.indeterminate = false;
+    } else if (selectedCount === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+    } else {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = true;
+    }
+}
+
+/**
+ * Generar PDF con horarios seleccionados
+ */
+function generatePDFWithSelectedSchedules() {
+    const selectedCheckboxes = document.querySelectorAll('.schedule-checkbox:checked');
+
+    if (selectedCheckboxes.length === 0) {
+        alert('❌ Debes seleccionar al menos un horario');
+        return;
+    }
+
+    // Recopilar horarios seleccionados
+    const selectedSchedules = [];
+    selectedCheckboxes.forEach(checkbox => {
+        selectedSchedules.push({
+            hora: checkbox.value,
+            hora_vuelta: checkbox.dataset.horaVuelta || null
+        });
+    });
+
+    console.log('📋 Horarios seleccionados:', selectedSchedules);
+
+    // Cerrar modal
+    closeScheduleSelectionModal();
+
+    // Mostrar indicador de carga
+    showPDFLoadingIndicator();
+
+    // Añadir horarios seleccionados a los filtros
+    const finalFilters = {
+        ...currentPDFFilters,
+        selected_schedules: JSON.stringify(selectedSchedules)
+    };
+
+    // Realizar petición AJAX para generar PDF
+    fetch(reservasAjax.ajax_url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
             action: 'generate_reservations_pdf_report',
-            ...filtros
+            ...finalFilters
         })
     })
-    .then(response => {
-        console.log('📡 Respuesta recibida del servidor');
-        return response.json();
-    })
-    .then(data => {
-        console.log('📊 Datos del servidor:', data);
+        .then(response => response.json())
+        .then(data => {
+            hidePDFLoadingIndicator();
 
-        // ✅ RESTAURAR BOTÓN CON ANIMACIÓN
-        button.disabled = false;
-        button.classList.remove('loading');
+            if (data.success) {
+                console.log('✅ PDF generado exitosamente con filtro de horarios');
 
-        if (data.success) {
-            console.log('✅ PDF generado exitosamente');
+                // Descargar archivo
+                const link = document.createElement('a');
+                link.href = data.data.pdf_url;
+                link.download = data.data.filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
 
-            // Descargar archivo
-            const link = document.createElement('a');
-            link.href = data.data.pdf_url;
-            link.download = data.data.filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            // ✅ MOSTRAR NOTIFICACIÓN MEJORADA
-            showNotification('✅ PDF generado y descargado correctamente', 'success');
-            
-            // ✅ EFECTO VISUAL DE ÉXITO
-            button.style.background = 'linear-gradient(135deg, #27ae60 0%, #229954 100%)';
-            setTimeout(() => {
-                button.style.background = '';
-            }, 2000);
-            
-        } else {
-            console.error('❌ Error del servidor:', data.data);
-            showNotification('❌ Error generando PDF: ' + data.data, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('❌ Error de conexión:', error);
-
-        // ✅ RESTAURAR BOTÓN EN CASO DE ERROR
-        button.disabled = false;
-        button.classList.remove('loading');
-        
-        showNotification('❌ Error de conexión al generar PDF', 'error');
-    });
+                showNotification('✅ PDF generado y descargado correctamente con horarios filtrados', 'success');
+            } else {
+                console.error('❌ Error del servidor:', data.data);
+                showNotification('❌ Error generando PDF: ' + data.data, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error de conexión:', error);
+            hidePDFLoadingIndicator();
+            showNotification('❌ Error de conexión al generar PDF', 'error');
+        });
 }
+
+/**
+ * Cerrar modal de selección de horarios
+ */
+function closeScheduleSelectionModal() {
+    document.getElementById('scheduleSelectionModal').style.display = 'none';
+}
+
+// Exponer funciones globalmente
+window.closeScheduleSelectionModal = closeScheduleSelectionModal;
+window.toggleAllSchedules = toggleAllSchedules;
+window.generatePDFWithSelectedSchedules = generatePDFWithSelectedSchedules;
 
 function showNotification(message, type) {
     console.log(`${type === 'success' ? '✅' : '❌'} ${message}`);
@@ -2651,7 +2994,16 @@ function renderReservationsReportWithFilters(data) {
                     <h5>${agencyName}</h5>
                     <div class="stat-number">${stat.total_reservas}</div>
                     <div class="stat-amount">${parseFloat(stat.ingresos_total || 0).toFixed(2)}€</div>
-                    <div class="stat-extra">${stat.total_personas} personas</div>
+                    <div class="stat-extra">
+    ${stat.total_personas} personas<br>
+    <small>
+                A: ${typeof stat.total_adultos !== 'undefined' ? stat.total_adultos : '-'} | 
+        R: ${typeof stat.total_residentes !== 'undefined' ? stat.total_residentes : '-'} | 
+        N: ${typeof stat.total_ninos_5_12 !== 'undefined' ? stat.total_ninos_5_12 : '-'} | 
+        B: ${typeof stat.total_ninos_menores !== 'undefined' ? stat.total_ninos_menores : '-'}
+
+    </small>
+</div>
                     <div class="stat-avg">Media: ${avgPerReserva}€/reserva</div>
                 </div>
             `;

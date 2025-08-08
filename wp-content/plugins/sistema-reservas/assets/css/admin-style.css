@@ -65,8 +65,8 @@
     color: #555;
 }
 
-.form-group input {
-    width: 100%;
+#personal-data-form .form-group input {
+    width: 100% !important;
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 4px;

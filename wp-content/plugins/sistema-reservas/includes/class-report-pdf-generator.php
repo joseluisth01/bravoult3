@@ -66,80 +66,108 @@ class ReservasReportPDFGenerator
     }
 
     private function get_report_data($filtros)
-    {
-        global $wpdb;
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        $table_agencies = $wpdb->prefix . 'reservas_agencies';
-        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+{
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    $table_agencies = $wpdb->prefix . 'reservas_agencies';
+    $table_servicios = $wpdb->prefix . 'reservas_servicios';
 
-        // Construir condiciones WHERE
-        $where_conditions = array();
-        $query_params = array();
+    // Construir condiciones WHERE
+    $where_conditions = array();
+    $query_params = array();
 
-        // Filtro por tipo de fecha
-        if ($filtros['tipo_fecha'] === 'compra') {
-            $where_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
-        } else {
-            $where_conditions[] = "r.fecha BETWEEN %s AND %s";
-        }
-        $query_params[] = $filtros['fecha_inicio'];
-        $query_params[] = $filtros['fecha_fin'];
-
-        // Filtro de estado
-        switch ($filtros['estado_filtro']) {
-            case 'confirmadas':
-                $where_conditions[] = "r.estado = 'confirmada'";
-                break;
-            case 'canceladas':
-                $where_conditions[] = "r.estado = 'cancelada'";
-                break;
-            case 'todas':
-                // No añadir condición
-                break;
-        }
-
-        // Filtro por agencias
-        switch ($filtros['agency_filter']) {
-            case 'sin_agencia':
-                $where_conditions[] = "r.agency_id IS NULL";
-                break;
-            case 'todas':
-                // No añadir condición
-                break;
-            default:
-                if (is_numeric($filtros['agency_filter']) && $filtros['agency_filter'] > 0) {
-                    $where_conditions[] = "r.agency_id = %d";
-                    $query_params[] = intval($filtros['agency_filter']);
-                }
-                break;
-        }
-
-        $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
-
-        // Query principal
-        $query = "SELECT r.*, 
-                         s.hora as servicio_hora, 
-                         s.hora_vuelta as servicio_hora_vuelta,
-                         COALESCE(a.agency_name, 'Web') as origen_reserva,
-                         a.inicial_localizador as inicial_agencia
-                 FROM $table_reservas r
-                 LEFT JOIN $table_servicios s ON r.servicio_id = s.id
-                 LEFT JOIN $table_agencies a ON r.agency_id = a.id
-                 $where_clause
-                 ORDER BY r.fecha ASC, s.hora ASC, r.agency_id ASC";
-
-        $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
-
-        // Agrupar datos
-        $reservas_agrupadas = $this->group_reservations($reservas);
-        $totales_agencias = $this->calculate_agency_totals($reservas);
-
-        return array(
-            'reservas_agrupadas' => $reservas_agrupadas,
-            'totales_agencias' => $totales_agencias,
-            'filtros' => $filtros
-        );
+    // Filtro por tipo de fecha
+    if ($filtros['tipo_fecha'] === 'compra') {
+        $where_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
+    } else {
+        $where_conditions[] = "r.fecha BETWEEN %s AND %s";
     }
+    $query_params[] = $filtros['fecha_inicio'];
+    $query_params[] = $filtros['fecha_fin'];
+
+    // Filtro de estado
+    switch ($filtros['estado_filtro']) {
+        case 'confirmadas':
+            $where_conditions[] = "r.estado = 'confirmada'";
+            break;
+        case 'canceladas':
+            $where_conditions[] = "r.estado = 'cancelada'";
+            break;
+        case 'todas':
+            // No añadir condición
+            break;
+    }
+
+    // Filtro por agencias
+    switch ($filtros['agency_filter']) {
+        case 'sin_agencia':
+            $where_conditions[] = "r.agency_id IS NULL";
+            break;
+        case 'todas':
+            // No añadir condición
+            break;
+        default:
+            if (is_numeric($filtros['agency_filter']) && $filtros['agency_filter'] > 0) {
+                $where_conditions[] = "r.agency_id = %d";
+                $query_params[] = intval($filtros['agency_filter']);
+            }
+            break;
+    }
+
+    // ✅ NUEVO: Filtro por horarios seleccionados
+    if (!empty($filtros['selected_schedules'])) {
+        $selected_schedules = json_decode($filtros['selected_schedules'], true);
+        
+        if (is_array($selected_schedules) && !empty($selected_schedules)) {
+            $schedule_conditions = array();
+            
+            foreach ($selected_schedules as $schedule) {
+                if (!empty($schedule['hora'])) {
+                    if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== 'null') {
+                        // Filtrar por hora de ida Y vuelta específicas
+                        $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
+                        $query_params[] = $schedule['hora'];
+                        $query_params[] = $schedule['hora_vuelta'];
+                    } else {
+                        // Filtrar solo por hora de ida
+                        $schedule_conditions[] = "(s.hora = %s AND (s.hora_vuelta IS NULL OR s.hora_vuelta = '00:00:00'))";
+                        $query_params[] = $schedule['hora'];
+                    }
+                }
+            }
+            
+            if (!empty($schedule_conditions)) {
+                $where_conditions[] = '(' . implode(' OR ', $schedule_conditions) . ')';
+            }
+        }
+    }
+
+    $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
+
+    // Query principal (resto sin cambios)
+    $query = "SELECT r.*, 
+                     s.hora as servicio_hora, 
+                     s.hora_vuelta as servicio_hora_vuelta,
+                     COALESCE(a.agency_name, 'Web') as origen_reserva,
+                     a.inicial_localizador as inicial_agencia
+             FROM $table_reservas r
+             LEFT JOIN $table_servicios s ON r.servicio_id = s.id
+             LEFT JOIN $table_agencies a ON r.agency_id = a.id
+             $where_clause
+             ORDER BY r.fecha ASC, s.hora ASC, r.agency_id ASC";
+
+    $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
+
+    // Agrupar datos
+    $reservas_agrupadas = $this->group_reservations($reservas);
+    $totales_agencias = $this->calculate_agency_totals($reservas);
+
+    return array(
+        'reservas_agrupadas' => $reservas_agrupadas,
+        'totales_agencias' => $totales_agencias,
+        'filtros' => $filtros
+    );
+}
 
     private function group_reservations($reservas)
     {

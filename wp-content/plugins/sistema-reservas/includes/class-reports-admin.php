@@ -78,6 +78,9 @@ class ReservasReportsAdmin
 add_action('wp_ajax_generate_reservations_pdf_report', array($this, 'generate_reservations_pdf_report'));
 add_action('wp_ajax_nopriv_generate_reservations_pdf_report', array($this, 'generate_reservations_pdf_report'));
 
+add_action('wp_ajax_get_available_schedules_for_pdf', array($this, 'get_available_schedules_for_pdf'));
+add_action('wp_ajax_nopriv_get_available_schedules_for_pdf', array($this, 'get_available_schedules_for_pdf'));
+
 
     }
 
@@ -347,15 +350,20 @@ add_action('wp_ajax_nopriv_generate_reservations_pdf_report', array($this, 'gene
 
                 // Obtener conteos por agencia
                 $agency_count_stats = $wpdb->get_results($wpdb->prepare(
-                    "SELECT 
-                    r.agency_id,
-                    COUNT(*) as total_reservas,
-                    SUM(r.total_personas) as total_personas
-                 FROM $table_reservas r
-                 $agency_count_where
-                 GROUP BY r.agency_id",
-                    ...$agency_count_params
-                ));
+    "SELECT 
+        r.agency_id,
+        COUNT(*) as total_reservas,
+        SUM(r.total_personas) as total_personas,
+        SUM(r.adultos) as total_adultos,
+        SUM(r.residentes) as total_residentes,
+        SUM(r.ninos_5_12) as total_ninos_5_12,
+        SUM(r.ninos_menores) as total_ninos_menores
+     FROM $table_reservas r
+     $agency_count_where
+     GROUP BY r.agency_id",
+    ...$agency_count_params
+));
+
 
                 // Obtener ingresos por agencia
                 $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
@@ -393,12 +401,16 @@ add_action('wp_ajax_nopriv_generate_reservations_pdf_report', array($this, 'gene
                     }
 
                     $stats_por_agencias[] = (object) array(
-                        'agency_name' => $agency_name,
-                        'agency_id' => $agency_id,
-                        'total_reservas' => $count->total_reservas,
-                        'total_personas' => $count->total_personas,
-                        'ingresos_total' => $revenue_by_agency[$agency_key] ?? 0
-                    );
+    'agency_name' => $agency_name,
+    'agency_id' => $agency_id,
+    'total_reservas' => (int) $count->total_reservas,
+    'total_personas' => (int) $count->total_personas,
+    'ingresos_total' => (float) ($revenue_by_agency[$agency_key] ?? 0),
+    'total_adultos' => isset($count->total_adultos) ? (int) $count->total_adultos : 0,
+    'total_residentes' => isset($count->total_residentes) ? (int) $count->total_residentes : 0,
+    'total_ninos_5_12' => isset($count->total_ninos_5_12) ? (int) $count->total_ninos_5_12 : 0,
+    'total_ninos_menores' => isset($count->total_ninos_menores) ? (int) $count->total_ninos_menores : 0
+);
                 }
 
                 // Ordenar por total de reservas
@@ -437,6 +449,146 @@ add_action('wp_ajax_nopriv_generate_reservations_pdf_report', array($this, 'gene
             die(json_encode(['success' => false, 'data' => 'Server error: ' . $e->getMessage()]));
         }
     }
+
+
+    /**
+ * Obtener horarios disponibles para filtro de PDF
+ */
+public function get_available_schedules_for_pdf()
+{
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+
+    if (!session_id()) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['reservas_user'])) {
+        wp_send_json_error('Sesión expirada');
+        return;
+    }
+
+    $user = $_SESSION['reservas_user'];
+    if (!in_array($user['role'], ['super_admin', 'admin'])) {
+        wp_send_json_error('Sin permisos');
+        return;
+    }
+
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    $table_agencies = $wpdb->prefix . 'reservas_agencies';
+    $table_servicios = $wpdb->prefix . 'reservas_servicios';
+
+    // Obtener filtros
+    $fecha_inicio = sanitize_text_field($_POST['fecha_inicio'] ?? date('Y-m-d'));
+    $fecha_fin = sanitize_text_field($_POST['fecha_fin'] ?? date('Y-m-d'));
+    $tipo_fecha = sanitize_text_field($_POST['tipo_fecha'] ?? 'servicio');
+    $estado_filtro = sanitize_text_field($_POST['estado_filtro'] ?? 'confirmadas');
+    $agency_filter = sanitize_text_field($_POST['agency_filter'] ?? 'todas');
+
+    try {
+        // Construir condiciones WHERE para obtener servicios únicos
+        $where_conditions = array();
+        $query_params = array();
+
+        // Filtro por tipo de fecha
+        if ($tipo_fecha === 'compra') {
+            $where_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
+        } else {
+            $where_conditions[] = "s.fecha BETWEEN %s AND %s";
+        }
+        $query_params[] = $fecha_inicio;
+        $query_params[] = $fecha_fin;
+
+        // Filtro de estado
+        switch ($estado_filtro) {
+            case 'confirmadas':
+                $where_conditions[] = "r.estado = 'confirmada'";
+                break;
+            case 'canceladas':
+                $where_conditions[] = "r.estado = 'cancelada'";
+                break;
+            case 'todas':
+                // No añadir condición
+                break;
+        }
+
+        // Filtro por agencias
+        switch ($agency_filter) {
+            case 'sin_agencia':
+                $where_conditions[] = "r.agency_id IS NULL";
+                break;
+            case 'todas':
+                // No añadir condición
+                break;
+            default:
+                if (is_numeric($agency_filter) && $agency_filter > 0) {
+                    $where_conditions[] = "r.agency_id = %d";
+                    $query_params[] = intval($agency_filter);
+                }
+                break;
+        }
+
+        $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
+
+        // Query para obtener horarios únicos con estadísticas
+        $schedules_query = "
+            SELECT 
+                s.hora,
+                s.hora_vuelta,
+                COUNT(DISTINCT r.id) as count,
+                COUNT(DISTINCT s.fecha) as days_count
+            FROM $table_reservas r
+            INNER JOIN $table_servicios s ON r.servicio_id = s.id
+            LEFT JOIN $table_agencies a ON r.agency_id = a.id
+            $where_clause
+            GROUP BY s.hora, s.hora_vuelta
+            ORDER BY s.hora ASC
+        ";
+
+        $schedules = $wpdb->get_results($wpdb->prepare($schedules_query, ...$query_params));
+
+        if ($wpdb->last_error) {
+            error_log('❌ Database error in get_available_schedules_for_pdf: ' . $wpdb->last_error);
+            wp_send_json_error('Error de base de datos: ' . $wpdb->last_error);
+            return;
+        }
+
+        // Obtener estadísticas generales
+        $stats_query = "
+            SELECT 
+                COUNT(DISTINCT r.id) as total_services,
+                COUNT(DISTINCT s.fecha) as days_with_services
+            FROM $table_reservas r
+            INNER JOIN $table_servicios s ON r.servicio_id = s.id
+            LEFT JOIN $table_agencies a ON r.agency_id = a.id
+            $where_clause
+        ";
+
+        $stats = $wpdb->get_row($wpdb->prepare($stats_query, ...$query_params));
+
+        $response_data = array(
+            'schedules' => $schedules,
+            'total_services' => intval($stats->total_services ?? 0),
+            'days_with_services' => intval($stats->days_with_services ?? 0),
+            'filtros' => array(
+                'fecha_inicio' => $fecha_inicio,
+                'fecha_fin' => $fecha_fin,
+                'tipo_fecha' => $tipo_fecha,
+                'estado_filtro' => $estado_filtro,
+                'agency_filter' => $agency_filter
+            )
+        );
+
+        wp_send_json_success($response_data);
+
+    } catch (Exception $e) {
+        error_log('❌ Exception in get_available_schedules_for_pdf: ' . $e->getMessage());
+        wp_send_json_error('Error del servidor: ' . $e->getMessage());
+    }
+}
 
 
     /**
