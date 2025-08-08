@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Generador de PDF para informes de reservas - NUEVO
+ * Generador de PDF para informes de reservas - CORREGIDO
  * Archivo: wp-content/plugins/sistema-reservas/includes/class-report-pdf-generator.php
  */
 
@@ -299,9 +299,9 @@ class ReservasReportPDFGenerator
                     'reservas' => array(),
                     'totales' => array(
                         'adultos' => 0,
-                        'ninos' => 0,
+                        'ninos_5_12' => 0,
+                        'bebes' => 0, // ✅ CAMBIO: SEPARAR BEBÉS
                         'residentes' => 0,
-                        'ninos_residentes' => 0,
                         'descuentos' => 0,
                         'importe' => 0
                     )
@@ -311,12 +311,12 @@ class ReservasReportPDFGenerator
             // Añadir reserva
             $grouped[$fecha][$turno][$origen]['reservas'][] = $reserva;
 
-            // Sumar totales
+            // ✅ CORRECCIÓN: SUMAR CORRECTAMENTE LOS TOTALES
             $totales = &$grouped[$fecha][$turno][$origen]['totales'];
             $totales['adultos'] += $reserva->adultos;
-            $totales['ninos'] += $reserva->ninos_5_12 + $reserva->ninos_menores;
+            $totales['ninos_5_12'] += $reserva->ninos_5_12; // Solo niños de 5-12
+            $totales['bebes'] += $reserva->ninos_menores; // ✅ BEBÉS SEPARADOS
             $totales['residentes'] += $reserva->residentes;
-            $totales['ninos_residentes'] += 0; // Asumo que no hay campo separado
             $totales['descuentos'] += $reserva->descuento_total;
             $totales['importe'] += $reserva->precio_final;
         }
@@ -360,19 +360,20 @@ class ReservasReportPDFGenerator
             if (!isset($totales[$origen])) {
                 $totales[$origen] = array(
                     'adultos' => 0,
-                    'ninos' => 0,
+                    'ninos_5_12' => 0,
+                    'bebes' => 0, // ✅ BEBÉS SEPARADOS
                     'residentes' => 0,
-                    'ninos_residentes' => 0,
                     'descuentos' => 0,
                     'importe' => 0,
                     'count' => 0
                 );
             }
 
+            // ✅ CORRECCIÓN: SUMAR CORRECTAMENTE
             $totales[$origen]['adultos'] += $reserva->adultos;
-            $totales[$origen]['ninos'] += $reserva->ninos_5_12 + $reserva->ninos_menores;
+            $totales[$origen]['ninos_5_12'] += $reserva->ninos_5_12; // Solo niños de 5-12
+            $totales[$origen]['bebes'] += $reserva->ninos_menores; // ✅ BEBÉS SEPARADOS
             $totales[$origen]['residentes'] += $reserva->residentes;
-            $totales[$origen]['ninos_residentes'] += 0;
             $totales[$origen]['descuentos'] += $reserva->descuento_total;
             $totales[$origen]['importe'] += $reserva->precio_final;
             $totales[$origen]['count'] += 1;
@@ -439,14 +440,13 @@ class ReservasReportPDFGenerator
         $this->pdf->SetFont('helvetica', 'B', 8);
         $this->pdf->SetFillColor(220, 220, 220);
 
-        // ✅ ANCHOS AJUSTADOS PARA QUE QUEPAN EN 190mm (ancho útil A4)
-        // Total: 190mm
+        // ✅ CABECERA CORREGIDA: ELIMINAR ADULTOS CORD. Y NIÑOS CORD., AÑADIR BEBÉS
         $this->pdf->Cell(25, 8, 'Fecha', 1, 0, 'C', true);           // 25mm
         $this->pdf->Cell(50, 8, 'Servicio - Horario', 1, 0, 'C', true); // 50mm
         $this->pdf->Cell(18, 8, 'Adultos', 1, 0, 'C', true);        // 18mm
         $this->pdf->Cell(15, 8, 'Niños', 1, 0, 'C', true);          // 15mm
-        $this->pdf->Cell(22, 8, 'Adultos Cord.', 1, 0, 'C', true);  // 22mm
-        $this->pdf->Cell(20, 8, 'Niños Cord.', 1, 0, 'C', true);    // 20mm
+        $this->pdf->Cell(15, 8, 'Bebés', 1, 0, 'C', true);          // 15mm - ✅ NUEVO
+        $this->pdf->Cell(22, 8, 'Residentes', 1, 0, 'C', true);     // 22mm - ✅ CAMBIADO
         $this->pdf->Cell(20, 8, 'Total Desc.', 1, 0, 'C', true);    // 20mm
         $this->pdf->Cell(20, 8, 'Importe Total', 1, 1, 'C', true);  // 20mm
 
@@ -459,9 +459,9 @@ class ReservasReportPDFGenerator
 
         $total_general = array(
             'adultos' => 0,
-            'ninos' => 0,
+            'ninos_5_12' => 0,
+            'bebes' => 0, // ✅ BEBÉS
             'residentes' => 0,
-            'ninos_residentes' => 0,
             'descuentos' => 0,
             'importe' => 0
         );
@@ -476,9 +476,9 @@ class ReservasReportPDFGenerator
 
             $total_dia = array(
                 'adultos' => 0,
-                'ninos' => 0,
+                'ninos_5_12' => 0,
+                'bebes' => 0, // ✅ BEBÉS
                 'residentes' => 0,
-                'ninos_residentes' => 0,
                 'descuentos' => 0,
                 'importe' => 0
             );
@@ -490,9 +490,9 @@ class ReservasReportPDFGenerator
 
                 $total_turno = array(
                     'adultos' => 0,
-                    'ninos' => 0,
+                    'ninos_5_12' => 0,
+                    'bebes' => 0, // ✅ BEBÉS
                     'residentes' => 0,
-                    'ninos_residentes' => 0,
                     'descuentos' => 0,
                     'importe' => 0
                 );
@@ -528,11 +528,11 @@ class ReservasReportPDFGenerator
 
         $totales = $datos['totales'];
 
-        // Datos del origen con los mismos anchos que la cabecera
+        // ✅ DATOS CORREGIDOS CON NUEVA ESTRUCTURA
         $this->pdf->Cell(18, 5, number_format($totales['adultos']), 1, 0, 'C');
-        $this->pdf->Cell(15, 5, number_format($totales['ninos']), 1, 0, 'C');
-        $this->pdf->Cell(22, 5, number_format($totales['residentes']), 1, 0, 'C');
-        $this->pdf->Cell(20, 5, number_format($totales['ninos_residentes']), 1, 0, 'C');
+        $this->pdf->Cell(15, 5, number_format($totales['ninos_5_12']), 1, 0, 'C'); // Solo niños 5-12
+        $this->pdf->Cell(15, 5, number_format($totales['bebes']), 1, 0, 'C'); // ✅ BEBÉS SEPARADOS
+        $this->pdf->Cell(22, 5, number_format($totales['residentes']), 1, 0, 'C'); // Solo residentes
         $this->pdf->Cell(20, 5, '-' . number_format($totales['descuentos'], 2) . ' €', 1, 0, 'R');
         $this->pdf->Cell(20, 5, number_format($totales['importe'], 2) . ' €', 1, 1, 'R');
 
@@ -569,12 +569,12 @@ class ReservasReportPDFGenerator
             $this->pdf->SetFillColor(245, 245, 245);
         }
 
-        // ✅ USAR LOS MISMOS ANCHOS
+        // ✅ USAR LOS MISMOS ANCHOS CORREGIDOS
         $this->pdf->Cell(75, 6, $label, 1, 0, 'R', true);           // 75mm (fecha + servicio)
         $this->pdf->Cell(18, 6, number_format($totales['adultos']), 1, 0, 'C', true);
-        $this->pdf->Cell(15, 6, number_format($totales['ninos']), 1, 0, 'C', true);
-        $this->pdf->Cell(22, 6, number_format($totales['residentes']), 1, 0, 'C', true);
-        $this->pdf->Cell(20, 6, number_format($totales['ninos_residentes']), 1, 0, 'C', true);
+        $this->pdf->Cell(15, 6, number_format($totales['ninos_5_12']), 1, 0, 'C', true); // Solo niños 5-12
+        $this->pdf->Cell(15, 6, number_format($totales['bebes']), 1, 0, 'C', true); // ✅ BEBÉS
+        $this->pdf->Cell(22, 6, number_format($totales['residentes']), 1, 0, 'C', true); // Solo residentes
         $this->pdf->Cell(20, 6, '-' . number_format($totales['descuentos'], 2) . '€', 1, 0, 'R', true);
         $this->pdf->Cell(20, 6, number_format($totales['importe'], 2) . '€', 1, 1, 'R', true);
     }
@@ -597,20 +597,19 @@ class ReservasReportPDFGenerator
         $this->pdf->Cell(0, 10, 'TOTALES', 0, 1, 'L');
         $this->pdf->Ln(5);
 
-        // ✅ CABECERA AJUSTADA PARA QUE QUEPA EN 190mm
-        $this->pdf->SetFont('helvetica', 'B', 8); // ✅ REDUCIR TAMAÑO DE FUENTE
+        // ✅ CABECERA CORREGIDA PARA TOTALES
+        $this->pdf->SetFont('helvetica', 'B', 8);
         $this->pdf->SetFillColor(220, 220, 220);
 
-        // ✅ ANCHOS AJUSTADOS PARA TOTAL: 190mm
+        // ✅ ANCHOS AJUSTADOS CON NUEVA ESTRUCTURA
         $this->pdf->Cell(35, 8, 'Origen', 1, 0, 'L', true);          // 35mm
         $this->pdf->Cell(18, 8, 'Adultos', 1, 0, 'C', true);        // 18mm
         $this->pdf->Cell(15, 8, 'Niños', 1, 0, 'C', true);          // 15mm
-        $this->pdf->Cell(20, 8, 'Adultos Cord.', 1, 0, 'C', true);  // 20mm
-        $this->pdf->Cell(18, 8, 'Niños Cord.', 1, 0, 'C', true);    // 18mm
+        $this->pdf->Cell(15, 8, 'Bebés', 1, 0, 'C', true);          // 15mm - ✅ NUEVO
+        $this->pdf->Cell(22, 8, 'Residentes', 1, 0, 'C', true);     // 22mm - ✅ CAMBIADO
         $this->pdf->Cell(22, 8, 'Total Desc.', 1, 0, 'C', true);    // 22mm
         $this->pdf->Cell(25, 8, 'Importe Total', 1, 0, 'C', true);  // 25mm
         $this->pdf->Cell(15, 8, 'Reservas', 1, 1, 'C', true);       // 15mm
-        // Total: 168mm (deja margen)
 
         // Datos por agencia
         $this->pdf->SetFont('helvetica', '', 7); // ✅ REDUCIR MÁS EL TAMAÑO DE FUENTE
@@ -621,9 +620,9 @@ class ReservasReportPDFGenerator
 
             $this->pdf->Cell(35, 6, $origen_truncado, 1, 0, 'L');
             $this->pdf->Cell(18, 6, number_format($totales['adultos']), 1, 0, 'C');
-            $this->pdf->Cell(15, 6, number_format($totales['ninos']), 1, 0, 'C');
-            $this->pdf->Cell(20, 6, number_format($totales['residentes']), 1, 0, 'C');
-            $this->pdf->Cell(18, 6, number_format($totales['ninos_residentes']), 1, 0, 'C');
+            $this->pdf->Cell(15, 6, number_format($totales['ninos_5_12']), 1, 0, 'C'); // Solo niños 5-12
+            $this->pdf->Cell(15, 6, number_format($totales['bebes']), 1, 0, 'C'); // ✅ BEBÉS SEPARADOS
+            $this->pdf->Cell(22, 6, number_format($totales['residentes']), 1, 0, 'C'); // Solo residentes
             $this->pdf->Cell(22, 6, '-' . number_format($totales['descuentos'], 2) . '€', 1, 0, 'R');
             $this->pdf->Cell(25, 6, number_format($totales['importe'], 2) . '€', 1, 0, 'R');
             $this->pdf->Cell(15, 6, number_format($totales['count']), 1, 1, 'C');
@@ -637,9 +636,9 @@ class ReservasReportPDFGenerator
     {
         $gran_total = array(
             'adultos' => 0,
-            'ninos' => 0,
+            'ninos_5_12' => 0,
+            'bebes' => 0, // ✅ BEBÉS
             'residentes' => 0,
-            'ninos_residentes' => 0,
             'descuentos' => 0,
             'importe' => 0,
             'count' => 0
@@ -648,9 +647,9 @@ class ReservasReportPDFGenerator
         // Sumar todos los totales
         foreach ($totales_agencias as $totales) {
             $gran_total['adultos'] += $totales['adultos'];
-            $gran_total['ninos'] += $totales['ninos'];
+            $gran_total['ninos_5_12'] += $totales['ninos_5_12'];
+            $gran_total['bebes'] += $totales['bebes']; // ✅ BEBÉS
             $gran_total['residentes'] += $totales['residentes'];
-            $gran_total['ninos_residentes'] += $totales['ninos_residentes'];
             $gran_total['descuentos'] += $totales['descuentos'];
             $gran_total['importe'] += $totales['importe'];
             $gran_total['count'] += $totales['count'];
@@ -664,9 +663,9 @@ class ReservasReportPDFGenerator
 
         $this->pdf->Cell(35, 8, 'TOTAL GENERAL', 1, 0, 'R', true);
         $this->pdf->Cell(18, 8, number_format($gran_total['adultos']), 1, 0, 'C', true);
-        $this->pdf->Cell(15, 8, number_format($gran_total['ninos']), 1, 0, 'C', true);
-        $this->pdf->Cell(20, 8, number_format($gran_total['residentes']), 1, 0, 'C', true);
-        $this->pdf->Cell(18, 8, number_format($gran_total['ninos_residentes']), 1, 0, 'C', true);
+        $this->pdf->Cell(15, 8, number_format($gran_total['ninos_5_12']), 1, 0, 'C', true); // Solo niños 5-12
+        $this->pdf->Cell(15, 8, number_format($gran_total['bebes']), 1, 0, 'C', true); // ✅ BEBÉS
+        $this->pdf->Cell(22, 8, number_format($gran_total['residentes']), 1, 0, 'C', true); // Solo residentes
         $this->pdf->Cell(22, 8, '-' . number_format($gran_total['descuentos'], 2) . '€', 1, 0, 'R', true);
         $this->pdf->Cell(25, 8, number_format($gran_total['importe'], 2) . '€', 1, 0, 'R', true);
         $this->pdf->Cell(15, 8, number_format($gran_total['count']), 1, 1, 'C', true);
