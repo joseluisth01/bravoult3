@@ -2568,7 +2568,7 @@ function loadReservationsByDateWithFilters(page = 1) {
     const estadoFiltro = document.getElementById('estado-filtro').value;
     const agencyFiltro = document.getElementById('agency-filtro').value;
 
-    // ✅ OBTENER HORARIOS SELECCIONADOS DEL FILTRO (opcional para el listado)
+    // ✅ OBTENER HORARIOS SELECCIONADOS DEL FILTRO
     const scheduleSelect = document.getElementById('schedule-filtro');
     const selectedSchedulesForList = [];
     
@@ -2591,7 +2591,7 @@ function loadReservationsByDateWithFilters(page = 1) {
     console.log('Tipo fecha:', tipoFecha);
     console.log('Estado filtro:', estadoFiltro);
     console.log('Agency filtro:', agencyFiltro);
-    console.log('Horarios seleccionados:', selectedSchedulesForList);
+    console.log('Horarios seleccionados para listado:', selectedSchedulesForList);
 
     if (!fechaInicio || !fechaFin) {
         alert('Por favor, selecciona ambas fechas');
@@ -2607,10 +2607,12 @@ function loadReservationsByDateWithFilters(page = 1) {
     formData.append('tipo_fecha', tipoFecha);
     formData.append('estado_filtro', estadoFiltro);
     formData.append('agency_filter', agencyFiltro);
-    // Solo añadir filtro de horarios si hay alguno seleccionado específicamente
+    
+    // ✅ AÑADIR FILTRO DE HORARIOS SI HAY ALGUNO SELECCIONADO ESPECÍFICAMENTE
     if (selectedSchedulesForList.length > 0) {
         formData.append('selected_schedules', JSON.stringify(selectedSchedulesForList));
     }
+    
     formData.append('page', page);
     formData.append('nonce', reservasAjax.nonce);
 
@@ -3142,7 +3144,7 @@ function initReportsEvents() {
 
     document.getElementById('schedule-filtro').addEventListener('change', function () {
         if (document.getElementById('fecha-inicio').value && document.getElementById('fecha-fin').value) {
-            loadReservationsByDateWithFilters();
+            loadReservationsByDateWithFilters(); 
         }
     });
 
@@ -9994,10 +9996,59 @@ function renderAgencyReservationsReportWithFilters(data) {
             break;
     }
 
+    let agencyText = '';
+    switch (data.filtros.agency_filter) {
+        case 'sin_agencia':
+            agencyText = ' - Reservas directas';
+            break;
+        case 'todas':
+            agencyText = ' - Todas las agencias';
+            break;
+        default:
+            if (data.filtros.agency_filter && data.filtros.agency_filter !== 'todas') {
+                const agencySelect = document.getElementById('agency-filtro');
+                const selectedOption = agencySelect.querySelector(`option[value="${data.filtros.agency_filter}"]`);
+                if (selectedOption) {
+                    agencyText = ` - ${selectedOption.textContent}`;
+                } else {
+                    agencyText = ` - Agencia ID: ${data.filtros.agency_filter}`;
+                }
+            }
+            break;
+    }
+
+    // ✅ NUEVO: TEXTO DEL FILTRO DE HORARIOS
+    let horariosText = '';
+    const scheduleSelect = document.getElementById('schedule-filtro');
+    if (scheduleSelect && scheduleSelect.selectedOptions.length > 0) {
+        const selectedSchedules = [];
+        
+        for (let option of scheduleSelect.selectedOptions) {
+            if (option.value === 'todos') {
+                horariosText = ' - Todos los horarios';
+                break;
+            } else if (option.value && option.value !== '') {
+                try {
+                    const schedule = JSON.parse(option.value.replace(/&quot;/g, '"'));
+                    const horaFormato = schedule.hora.substring(0, 5);
+                    const horaVueltaText = schedule.hora_vuelta && schedule.hora_vuelta !== '00:00:00' ? 
+                        `-${schedule.hora_vuelta.substring(0, 5)}` : '';
+                    selectedSchedules.push(`${horaFormato}${horaVueltaText}`);
+                } catch (e) {
+                    console.warn('Error parsing schedule text:', option.value);
+                }
+            }
+        }
+        
+        if (selectedSchedules.length > 0) {
+            horariosText = ` - Horarios: ${selectedSchedules.join(', ')}`;
+        }
+    }
+
     // Mostrar tabla de reservas
     let tableHtml = `
         <div class="table-header">
-            <h4>Mis Reservas por ${tipoFechaText}: ${data.filtros.fecha_inicio} al ${data.filtros.fecha_fin}${estadoText}</h4>
+            <h4>Reservas por ${tipoFechaText}: ${data.filtros.fecha_inicio} al ${data.filtros.fecha_fin}${estadoText}${agencyText}${horariosText}</h4>
         </div>
         <table class="reservations-table-data">
             <thead>
