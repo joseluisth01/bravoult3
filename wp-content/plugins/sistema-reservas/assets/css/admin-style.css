@@ -73,6 +73,45 @@
     font-size: 16px;
 }
 
+/* ✅ ESTILOS PARA EL SELECT DE HORARIOS */
+#schedule-filtro {
+    min-height: 120px !important;
+    background-color: #f8f9fa;
+    border: 2px solid #0073aa;
+    border-radius: 4px;
+}
+
+#schedule-filtro option {
+    padding: 5px 8px;
+    margin: 1px 0;
+}
+
+#schedule-filtro option:checked {
+    background: #0073aa !important;
+    color: white !important;
+}
+
+#schedule-filtro option[value="todos"] {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    font-weight: bold;
+}
+
+#schedule-filtro option[value="todos"]:checked {
+    background: linear-gradient(135deg, #1e7e34 0%, #17a2b8 100%) !important;
+}
+
+.filter-group {
+    position: relative;
+}
+
+.filter-group small {
+    position: absolute;
+    bottom: -15px;
+    left: 0;
+    font-style: italic;
+}
+
 .btn-login {
     width: 100%;
     padding: 12px;
