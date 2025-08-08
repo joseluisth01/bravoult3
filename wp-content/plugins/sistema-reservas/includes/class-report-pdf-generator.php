@@ -65,7 +65,7 @@ class ReservasReportPDFGenerator
         }
     }
 
-    private function get_report_data($filtros)
+private function get_report_data($filtros)
 {
     global $wpdb;
     $table_reservas = $wpdb->prefix . 'reservas_reservas';
@@ -114,7 +114,7 @@ class ReservasReportPDFGenerator
             break;
     }
 
-    // ✅ NUEVO: Filtro por horarios seleccionados
+    // ✅ NUEVO: Filtro por horarios seleccionados - CORREGIDO
     if (!empty($filtros['selected_schedules'])) {
         $selected_schedules = json_decode($filtros['selected_schedules'], true);
         
@@ -123,14 +123,15 @@ class ReservasReportPDFGenerator
             
             foreach ($selected_schedules as $schedule) {
                 if (!empty($schedule['hora'])) {
-                    if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== 'null') {
+                    // ✅ CORREGIR: Usar TIME() para comparar solo la parte de hora
+                    if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== 'null' && $schedule['hora_vuelta'] !== '00:00:00') {
                         // Filtrar por hora de ida Y vuelta específicas
-                        $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
+                        $schedule_conditions[] = "(TIME(s.hora) = TIME(%s) AND TIME(s.hora_vuelta) = TIME(%s))";
                         $query_params[] = $schedule['hora'];
                         $query_params[] = $schedule['hora_vuelta'];
                     } else {
                         // Filtrar solo por hora de ida
-                        $schedule_conditions[] = "(s.hora = %s AND (s.hora_vuelta IS NULL OR s.hora_vuelta = '00:00:00'))";
+                        $schedule_conditions[] = "(TIME(s.hora) = TIME(%s) AND (s.hora_vuelta IS NULL OR s.hora_vuelta = '' OR TIME(s.hora_vuelta) = '00:00:00'))";
                         $query_params[] = $schedule['hora'];
                     }
                 }
@@ -144,19 +145,32 @@ class ReservasReportPDFGenerator
 
     $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
 
-    // Query principal (resto sin cambios)
+    // ✅ AÑADIR LOG PARA DEBUG
+    error_log('=== PDF QUERY DEBUG ===');
+    error_log('Selected schedules: ' . ($filtros['selected_schedules'] ?? 'No schedules'));
+    error_log('Where clause: ' . $where_clause);
+    error_log('Query params: ' . print_r($query_params, true));
+
+    // Query principal
     $query = "SELECT r.*, 
                      s.hora as servicio_hora, 
                      s.hora_vuelta as servicio_hora_vuelta,
                      COALESCE(a.agency_name, 'Web') as origen_reserva,
                      a.inicial_localizador as inicial_agencia
              FROM $table_reservas r
-             LEFT JOIN $table_servicios s ON r.servicio_id = s.id
+             INNER JOIN $table_servicios s ON r.servicio_id = s.id
              LEFT JOIN $table_agencies a ON r.agency_id = a.id
              $where_clause
              ORDER BY r.fecha ASC, s.hora ASC, r.agency_id ASC";
 
     $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
+
+    // ✅ AÑADIR LOG PARA VERIFICAR RESULTADOS
+    error_log('Total reservas encontradas: ' . count($reservas));
+    if (!empty($reservas)) {
+        error_log('Primera reserva - Hora: ' . $reservas[0]->servicio_hora . ', Fecha: ' . $reservas[0]->fecha);
+        error_log('Última reserva - Hora: ' . end($reservas)->servicio_hora . ', Fecha: ' . end($reservas)->fecha);
+    }
 
     // Agrupar datos
     $reservas_agrupadas = $this->group_reservations($reservas);
@@ -217,18 +231,18 @@ class ReservasReportPDFGenerator
         return $grouped;
     }
 
-    private function get_turno_name($hora, $hora_vuelta)
-    {
-        $hora_formato = substr($hora, 0, 5);
+private function get_turno_name($hora, $hora_vuelta)
+{
+    // ✅ ASEGURAR QUE SOLO TOMAMOS LA PARTE DE HORA (HH:MM)
+    $hora_formato = date('H:i', strtotime($hora));
 
-        if ($hora_vuelta && $hora_vuelta !== '00:00:00') {
-            $vuelta_formato = substr($hora_vuelta, 0, 5);
-            return "Turno de $hora_formato a $vuelta_formato";
-        } else {
-            // Si no hay hora de vuelta, usar un formato genérico
-            return "Turno de $hora_formato";
-        }
+    if ($hora_vuelta && $hora_vuelta !== '00:00:00' && !empty($hora_vuelta)) {
+        $vuelta_formato = date('H:i', strtotime($hora_vuelta));
+        return "Turno de $hora_formato a $vuelta_formato";
+    } else {
+        return "Turno de $hora_formato";
     }
+}
 
     private function get_origen_name($reserva)
     {
@@ -275,34 +289,57 @@ class ReservasReportPDFGenerator
     }
 
     private function add_header($filtros)
-    {
-        // Título principal
-        $this->pdf->SetFont('helvetica', 'B', 16);
-        $this->pdf->Cell(0, 10, 'Listado de Reservas', 0, 1, 'C');
-        $this->pdf->Ln(5);
+{
+    // Título principal
+    $this->pdf->SetFont('helvetica', 'B', 16);
+    $this->pdf->Cell(0, 10, 'Listado de Reservas', 0, 1, 'C');
+    $this->pdf->Ln(5);
 
-        // Período
-        $fecha_inicio_formateada = date('d/m/Y', strtotime($filtros['fecha_inicio']));
-        $fecha_fin_formateada = date('d/m/Y', strtotime($filtros['fecha_fin']));
+    // Período
+    $fecha_inicio_formateada = date('d/m/Y', strtotime($filtros['fecha_inicio']));
+    $fecha_fin_formateada = date('d/m/Y', strtotime($filtros['fecha_fin']));
 
-        $this->pdf->SetFont('helvetica', '', 12);
-        $this->pdf->Cell(0, 8, "Período: $fecha_inicio_formateada - $fecha_fin_formateada", 0, 1, 'C');
+    $this->pdf->SetFont('helvetica', '', 12);
+    $this->pdf->Cell(0, 8, "Período: $fecha_inicio_formateada - $fecha_fin_formateada", 0, 1, 'C');
 
-        // Filtros aplicados
-        $this->pdf->SetFont('helvetica', '', 10);
-        $filtros_texto = array();
-        $filtros_texto[] = "Tipo fecha: " . ($filtros['tipo_fecha'] === 'compra' ? 'Compra' : 'Servicio');
-        $filtros_texto[] = "Estado: " . ucfirst($filtros['estado_filtro']);
-        if ($filtros['agency_filter'] !== 'todas') {
-            $filtros_texto[] = "Agencia: " . $filtros['agency_filter'];
-        }
-
-        $this->pdf->Cell(0, 6, implode(' | ', $filtros_texto), 0, 1, 'C');
-        $this->pdf->Ln(8);
-
-        // Cabecera de tabla
-        $this->add_table_header();
+    // Filtros aplicados
+    $this->pdf->SetFont('helvetica', '', 10);
+    $filtros_texto = array();
+    $filtros_texto[] = "Tipo fecha: " . ($filtros['tipo_fecha'] === 'compra' ? 'Compra' : 'Servicio');
+    $filtros_texto[] = "Estado: " . ucfirst($filtros['estado_filtro']);
+    
+    if ($filtros['agency_filter'] !== 'todas') {
+        $filtros_texto[] = "Agencia: " . $filtros['agency_filter'];
     }
+
+    // ✅ MOSTRAR HORARIOS FILTRADOS
+    if (!empty($filtros['selected_schedules'])) {
+        $selected_schedules = json_decode($filtros['selected_schedules'], true);
+        if (is_array($selected_schedules) && !empty($selected_schedules)) {
+            $horarios_texto = array();
+            foreach ($selected_schedules as $schedule) {
+                if (!empty($schedule['hora'])) {
+                    $hora_formato = date('H:i', strtotime($schedule['hora']));
+                    if (!empty($schedule['hora_vuelta']) && $schedule['hora_vuelta'] !== '00:00:00') {
+                        $vuelta_formato = date('H:i', strtotime($schedule['hora_vuelta']));
+                        $horarios_texto[] = "$hora_formato-$vuelta_formato";
+                    } else {
+                        $horarios_texto[] = $hora_formato;
+                    }
+                }
+            }
+            if (!empty($horarios_texto)) {
+                $filtros_texto[] = "Horarios: " . implode(', ', $horarios_texto);
+            }
+        }
+    }
+
+    $this->pdf->Cell(0, 6, implode(' | ', $filtros_texto), 0, 1, 'C');
+    $this->pdf->Ln(8);
+
+    // Cabecera de tabla
+    $this->add_table_header();
+}
 
     private function add_table_header()
     {

@@ -2764,16 +2764,20 @@ function generatePDFWithSelectedSchedules() {
         return;
     }
 
-    // Recopilar horarios seleccionados
+    // ✅ RECOPILAR HORARIOS SELECCIONADOS CON EL FORMATO CORRECTO
     const selectedSchedules = [];
     selectedCheckboxes.forEach(checkbox => {
+        const hora = checkbox.value;
+        const hora_vuelta = checkbox.dataset.horaVuelta || null;
+        
+        // ✅ LIMPIAR DATOS
         selectedSchedules.push({
-            hora: checkbox.value,
-            hora_vuelta: checkbox.dataset.horaVuelta || null
+            hora: hora,
+            hora_vuelta: (hora_vuelta && hora_vuelta !== 'null' && hora_vuelta !== '') ? hora_vuelta : null
         });
     });
 
-    console.log('📋 Horarios seleccionados:', selectedSchedules);
+    console.log('📋 Horarios seleccionados para PDF:', selectedSchedules);
 
     // Cerrar modal
     closeScheduleSelectionModal();
@@ -2781,11 +2785,13 @@ function generatePDFWithSelectedSchedules() {
     // Mostrar indicador de carga
     showPDFLoadingIndicator();
 
-    // Añadir horarios seleccionados a los filtros
+    // ✅ AÑADIR HORARIOS SELECCIONADOS A LOS FILTROS
     const finalFilters = {
         ...currentPDFFilters,
-        selected_schedules: JSON.stringify(selectedSchedules)
+        selected_schedules: JSON.stringify(selectedSchedules) // ✅ ASEGURAR QUE SE ENVÍA COMO STRING
     };
+
+    console.log('📤 Filtros finales enviados:', finalFilters);
 
     // Realizar petición AJAX para generar PDF
     fetch(reservasAjax.ajax_url, {
@@ -2798,32 +2804,32 @@ function generatePDFWithSelectedSchedules() {
             ...finalFilters
         })
     })
-        .then(response => response.json())
-        .then(data => {
-            hidePDFLoadingIndicator();
+    .then(response => response.json())
+    .then(data => {
+        hidePDFLoadingIndicator();
 
-            if (data.success) {
-                console.log('✅ PDF generado exitosamente con filtro de horarios');
+        if (data.success) {
+            console.log('✅ PDF generado exitosamente con filtro de horarios');
 
-                // Descargar archivo
-                const link = document.createElement('a');
-                link.href = data.data.pdf_url;
-                link.download = data.data.filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+            // Descargar archivo
+            const link = document.createElement('a');
+            link.href = data.data.pdf_url;
+            link.download = data.data.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
 
-                showNotification('✅ PDF generado y descargado correctamente con horarios filtrados', 'success');
-            } else {
-                console.error('❌ Error del servidor:', data.data);
-                showNotification('❌ Error generando PDF: ' + data.data, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('❌ Error de conexión:', error);
-            hidePDFLoadingIndicator();
-            showNotification('❌ Error de conexión al generar PDF', 'error');
-        });
+            showNotification('✅ PDF generado y descargado correctamente con horarios filtrados', 'success');
+        } else {
+            console.error('❌ Error del servidor:', data.data);
+            showNotification('❌ Error generando PDF: ' + data.data, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error de conexión:', error);
+        hidePDFLoadingIndicator();
+        showNotification('❌ Error de conexión al generar PDF', 'error');
+    });
 }
 
 /**
