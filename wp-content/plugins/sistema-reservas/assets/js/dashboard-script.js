@@ -2431,7 +2431,7 @@ function downloadPDFReport() {
     // ✅ OBTENER HORARIOS SELECCIONADOS DEL FILTRO
     const scheduleSelect = document.getElementById('schedule-filtro');
     const selectedSchedules = [];
-    
+
     for (let option of scheduleSelect.selectedOptions) {
         if (option.value === 'todos') {
             // Si se selecciona "todos", obtener todos los horarios disponibles
@@ -2497,32 +2497,32 @@ function downloadPDFReport() {
             ...finalFilters
         })
     })
-    .then(response => response.json())
-    .then(data => {
-        hidePDFLoadingIndicator();
+        .then(response => response.json())
+        .then(data => {
+            hidePDFLoadingIndicator();
 
-        if (data.success) {
-            console.log('✅ PDF generado exitosamente');
+            if (data.success) {
+                console.log('✅ PDF generado exitosamente');
 
-            // Descargar archivo
-            const link = document.createElement('a');
-            link.href = data.data.pdf_url;
-            link.download = data.data.filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+                // Descargar archivo
+                const link = document.createElement('a');
+                link.href = data.data.pdf_url;
+                link.download = data.data.filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
 
-            showNotification('✅ PDF generado correctamente', 'success');
-        } else {
-            console.error('❌ Error del servidor:', data.data);
-            showNotification('❌ Error generando PDF: ' + data.data, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('❌ Error de conexión:', error);
-        hidePDFLoadingIndicator();
-        showNotification('❌ Error de conexión al generar PDF', 'error');
-    });
+                showNotification('✅ PDF generado correctamente', 'success');
+            } else {
+                console.error('❌ Error del servidor:', data.data);
+                showNotification('❌ Error generando PDF: ' + data.data, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error de conexión:', error);
+            hidePDFLoadingIndicator();
+            showNotification('❌ Error de conexión al generar PDF', 'error');
+        });
 }
 
 
@@ -2571,7 +2571,7 @@ function loadReservationsByDateWithFilters(page = 1) {
     // ✅ OBTENER HORARIOS SELECCIONADOS DEL FILTRO
     const scheduleSelect = document.getElementById('schedule-filtro');
     const selectedSchedulesForList = [];
-    
+
     for (let option of scheduleSelect.selectedOptions) {
         if (option.value === 'todos') {
             // Si "todos" está seleccionado, no filtrar por horarios
@@ -2607,12 +2607,12 @@ function loadReservationsByDateWithFilters(page = 1) {
     formData.append('tipo_fecha', tipoFecha);
     formData.append('estado_filtro', estadoFiltro);
     formData.append('agency_filter', agencyFiltro);
-    
+
     // ✅ AÑADIR FILTRO DE HORARIOS SI HAY ALGUNO SELECCIONADO ESPECÍFICAMENTE
     if (selectedSchedulesForList.length > 0) {
         formData.append('selected_schedules', JSON.stringify(selectedSchedulesForList));
     }
-    
+
     formData.append('page', page);
     formData.append('nonce', reservasAjax.nonce);
 
@@ -2620,21 +2620,21 @@ function loadReservationsByDateWithFilters(page = 1) {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            renderReservationsReportWithFilters(data.data);
-        } else {
-            console.error('❌ Error del servidor:', data.data);
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderReservationsReportWithFilters(data.data);
+            } else {
+                console.error('❌ Error del servidor:', data.data);
+                document.getElementById('reservations-list').innerHTML =
+                    '<div class="error">Error: ' + data.data + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error de conexión:', error);
             document.getElementById('reservations-list').innerHTML =
-                '<div class="error">Error: ' + data.data + '</div>';
-        }
-    })
-    .catch(error => {
-        console.error('❌ Error de conexión:', error);
-        document.getElementById('reservations-list').innerHTML =
-            '<div class="error">Error de conexión</div>';
-    });
+                '<div class="error">Error de conexión</div>';
+        });
 }
 
 function renderReservationsReportWithFilters(data) {
@@ -2706,15 +2706,15 @@ function renderReservationsReportWithFilters(data) {
                     <div class="stat-number">${stat.total_reservas}</div>
                     <div class="stat-amount">${parseFloat(stat.ingresos_total || 0).toFixed(2)}€</div>
                     <div class="stat-extra">
-    ${stat.total_personas} personas<br>
-    <small>
-                A: ${typeof stat.total_adultos !== 'undefined' ? stat.total_adultos : '-'} | 
-        R: ${typeof stat.total_residentes !== 'undefined' ? stat.total_residentes : '-'} | 
-        N: ${typeof stat.total_ninos_5_12 !== 'undefined' ? stat.total_ninos_5_12 : '-'} | 
-        B: ${typeof stat.total_ninos_menores !== 'undefined' ? stat.total_ninos_menores : '-'}
+                        ${stat.total_personas} personas<br>
+                        <small>
+                                    A: ${typeof stat.total_adultos !== 'undefined' ? stat.total_adultos : '-'} | 
+                            R: ${typeof stat.total_residentes !== 'undefined' ? stat.total_residentes : '-'} | 
+                            N: ${typeof stat.total_ninos_5_12 !== 'undefined' ? stat.total_ninos_5_12 : '-'} | 
+                            B: ${typeof stat.total_ninos_menores !== 'undefined' ? stat.total_ninos_menores : '-'}
 
-    </small>
-</div>
+                        </small>
+                    </div>
                     <div class="stat-avg">Media: ${avgPerReserva}€/reserva</div>
                 </div>
             `;
@@ -3132,11 +3132,11 @@ function initReportsEvents() {
     const agencySelect = document.getElementById('agency-filtro');
     if (agencySelect) {
         document.getElementById('agency-filtro').addEventListener('change', function () {
-        loadAvailableSchedulesForFilter();
-        if (document.getElementById('fecha-inicio').value && document.getElementById('fecha-fin').value) {
-            loadReservationsByDateWithFilters();
-        }
-    });
+            loadAvailableSchedulesForFilter();
+            if (document.getElementById('fecha-inicio').value && document.getElementById('fecha-fin').value) {
+                loadReservationsByDateWithFilters();
+            }
+        });
         console.log('✅ Evento de cambio de agencia configurado');
     } else {
         console.warn('⚠️ Elemento agency-filtro no encontrado al configurar eventos');
@@ -3144,7 +3144,7 @@ function initReportsEvents() {
 
     document.getElementById('schedule-filtro').addEventListener('change', function () {
         if (document.getElementById('fecha-inicio').value && document.getElementById('fecha-fin').value) {
-            loadReservationsByDateWithFilters(); 
+            loadReservationsByDateWithFilters();
         }
     });
 
@@ -3230,25 +3230,25 @@ function loadAvailableSchedulesForFilter() {
             ...filtros
         })
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            updateScheduleFilterOptions(data.data.schedules);
-        } else {
-            console.error('❌ Error cargando horarios:', data.data);
-            scheduleSelect.innerHTML = '<option value="">Error cargando horarios</option>';
-        }
-    })
-    .catch(error => {
-        console.error('❌ Error de conexión:', error);
-        scheduleSelect.innerHTML = '<option value="">Error de conexión</option>';
-    });
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateScheduleFilterOptions(data.data.schedules);
+            } else {
+                console.error('❌ Error cargando horarios:', data.data);
+                scheduleSelect.innerHTML = '<option value="">Error cargando horarios</option>';
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error de conexión:', error);
+            scheduleSelect.innerHTML = '<option value="">Error de conexión</option>';
+        });
 }
 
 // ✅ NUEVA FUNCIÓN para actualizar las opciones del select de horarios
 function updateScheduleFilterOptions(schedules) {
     const scheduleSelect = document.getElementById('schedule-filtro');
-    
+
     if (!schedules || schedules.length === 0) {
         scheduleSelect.innerHTML = '<option value="">No hay horarios disponibles</option>';
         return;
@@ -10022,7 +10022,7 @@ function renderAgencyReservationsReportWithFilters(data) {
     const scheduleSelect = document.getElementById('schedule-filtro');
     if (scheduleSelect && scheduleSelect.selectedOptions.length > 0) {
         const selectedSchedules = [];
-        
+
         for (let option of scheduleSelect.selectedOptions) {
             if (option.value === 'todos') {
                 horariosText = ' - Todos los horarios';
@@ -10031,7 +10031,7 @@ function renderAgencyReservationsReportWithFilters(data) {
                 try {
                     const schedule = JSON.parse(option.value.replace(/&quot;/g, '"'));
                     const horaFormato = schedule.hora.substring(0, 5);
-                    const horaVueltaText = schedule.hora_vuelta && schedule.hora_vuelta !== '00:00:00' ? 
+                    const horaVueltaText = schedule.hora_vuelta && schedule.hora_vuelta !== '00:00:00' ?
                         `-${schedule.hora_vuelta.substring(0, 5)}` : '';
                     selectedSchedules.push(`${horaFormato}${horaVueltaText}`);
                 } catch (e) {
@@ -10039,7 +10039,7 @@ function renderAgencyReservationsReportWithFilters(data) {
                 }
             }
         }
-        
+
         if (selectedSchedules.length > 0) {
             horariosText = ` - Horarios: ${selectedSchedules.join(', ')}`;
         }
