@@ -28,43 +28,41 @@ class ReservasCalendarAdmin
 
     public function get_calendar_data()
     {
+error_log('=== CALENDAR AJAX REQUEST START ===');
+    
+    // ✅ VERIFICAR NONCE CORRECTAMENTE
+    if (!wp_verify_nonce($_POST['nonce'] ?? '', 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
 
-        error_log('=== CALENDAR AJAX REQUEST START ===');
-        error_log('POST data: ' . print_r($_POST, true));
+    header('Content-Type: application/json');
 
-        // ✅ NO USAR ob_clean() QUE PUEDE CAUSAR PROBLEMAS
-        header('Content-Type: application/json');
+    try {
+        if (!session_id()) {
+            session_start();
+        }
 
-        try {
+        // ✅ VERIFICAR SESIÓN MÁS FLEXIBLE
+        if (!isset($_SESSION['reservas_user'])) {
+            error_log('❌ No hay usuario en sesión');
+            wp_send_json_error('Sesión expirada. Recarga la página e inicia sesión nuevamente.');
+            return;
+        }
 
+        $user = $_SESSION['reservas_user'];
+        if (!in_array($user['role'], ['super_admin', 'admin'])) {
+            error_log('❌ Usuario sin permisos: ' . $user['role']);
+            wp_send_json_error('Sin permisos');
+            return;
+        }
 
-            if (!session_id()) {
-                session_start();
-            }
+        // ✅ RESTO DEL CÓDIGO EXISTENTE...
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'reservas_servicios';
 
-            error_log('Session data: ' . print_r($_SESSION ?? [], true));
-
-            if (!isset($_SESSION['reservas_user'])) {
-                error_log('❌ No hay usuario en sesión');
-                wp_send_json_error('Sesión expirada. Recarga la página e inicia sesión nuevamente.');
-                return;
-            }
-
-            $user = $_SESSION['reservas_user'];
-            if (!in_array($user['role'], ['super_admin', 'admin'])) {
-                error_log('❌ Usuario sin permisos: ' . $user['role']);
-                wp_send_json_error('Sin permisos');
-                return;
-            }
-
-            error_log('✅ Usuario validado: ' . $user['username']);
-
-            // ✅ OBTENER DATOS DEL CALENDARIO
-            global $wpdb;
-            $table_name = $wpdb->prefix . 'reservas_servicios';
-
-            $month = isset($_POST['month']) ? intval($_POST['month']) : date('n');
-            $year = isset($_POST['year']) ? intval($_POST['year']) : date('Y');
+        $month = isset($_POST['month']) ? intval($_POST['month']) : date('n');
+        $year = isset($_POST['year']) ? intval($_POST['year']) : date('Y');
 
             error_log("Loading calendar for: $month/$year");
 

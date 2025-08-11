@@ -2526,10 +2526,7 @@ function downloadPDFReport() {
 }
 
 
-// Exponer funciones globalmente
-window.closeScheduleSelectionModal = closeScheduleSelectionModal;
-window.toggleAllSchedules = toggleAllSchedules;
-window.generatePDFWithSelectedSchedules = generatePDFWithSelectedSchedules;
+
 
 function showNotification(message, type) {
     console.log(`${type === 'success' ? '✅' : '❌'} ${message}`);
@@ -4394,29 +4391,59 @@ function initAdminQuickReservation() {
 
 function loadAdminSystemConfiguration() {
     return new Promise((resolve, reject) => {
+        console.log('=== CARGANDO CONFIGURACIÓN ADMIN ===');
+
+        // ✅ INICIALIZAR VARIABLE POR DEFECTO ANTES DE LA PETICIÓN
+        adminDiasAnticiapcionMinima = 1;
+
+        // ✅ VERIFICAR QUE TENEMOS LAS VARIABLES NECESARIAS
+        if (typeof reservasAjax === 'undefined') {
+            console.error('reservasAjax no está definido');
+            adminDiasAnticiapcionMinima = 1;
+            resolve();
+            return;
+        }
+
         const formData = new FormData();
         formData.append('action', 'get_configuration');
         formData.append('nonce', reservasAjax.nonce);
 
         fetch(reservasAjax.ajax_url, {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'same-origin'
         })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const config = data.data;
-                    adminDiasAnticiapcionMinima = parseInt(config.servicios?.dias_anticipacion_minima?.value || '1');
-                    console.log('Admin: Días de anticipación mínima cargados:', adminDiasAnticiapcionMinima);
-                    resolve();
-                } else {
-                    console.warn('Admin: No se pudo cargar configuración, usando valores por defecto');
+            .then(response => {
+                console.log('Response status:', response.status);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                return response.text();
+            })
+            .then(text => {
+                console.log('Response text length:', text.length);
+
+                try {
+                    const data = JSON.parse(text);
+                    if (data.success && data.data && data.data.servicios) {
+                        adminDiasAnticiapcionMinima = parseInt(data.data.servicios.dias_anticipacion_minima?.value || '1');
+                        console.log('✅ Configuración admin cargada:', adminDiasAnticiapcionMinima);
+                        resolve();
+                    } else {
+                        console.error('❌ Error del servidor:', data.data);
+                        adminDiasAnticiapcionMinima = 1;
+                        resolve();
+                    }
+                } catch (e) {
+                    console.error('❌ Error parsing JSON:', e);
                     adminDiasAnticiapcionMinima = 1;
                     resolve();
                 }
             })
             .catch(error => {
-                console.error('Error cargando configuración:', error);
+                console.error('❌ Fetch error:', error);
                 adminDiasAnticiapcionMinima = 1;
                 resolve();
             });
