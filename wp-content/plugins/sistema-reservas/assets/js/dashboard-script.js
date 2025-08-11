@@ -2692,7 +2692,7 @@ function renderReservationsReportWithFilters(data) {
         statsCompleteHtml += statusStatsHtml;
     }
 
-    // ✅ NUEVO: ESTADÍSTICAS POR AGENCIAS
+    // Estadísticas por agencias (sin cambios)
     if (data.stats_por_agencias && data.stats_por_agencias.length > 0) {
         let agencyStatsHtml = '<div class="stats-by-agencies"><h4 style="grid-column: 1/-1; margin: 0;">🏢 Desglose por Agencias</h4>';
 
@@ -2708,11 +2708,10 @@ function renderReservationsReportWithFilters(data) {
                     <div class="stat-extra">
                         ${stat.total_personas} personas<br>
                         <small>
-                                    A: ${typeof stat.total_adultos !== 'undefined' ? stat.total_adultos : '-'} | 
+                            A: ${typeof stat.total_adultos !== 'undefined' ? stat.total_adultos : '-'} | 
                             R: ${typeof stat.total_residentes !== 'undefined' ? stat.total_residentes : '-'} | 
                             N: ${typeof stat.total_ninos_5_12 !== 'undefined' ? stat.total_ninos_5_12 : '-'} | 
                             B: ${typeof stat.total_ninos_menores !== 'undefined' ? stat.total_ninos_menores : '-'}
-
                         </small>
                     </div>
                     <div class="stat-avg">Media: ${avgPerReserva}€/reserva</div>
@@ -2727,7 +2726,7 @@ function renderReservationsReportWithFilters(data) {
     document.getElementById('reservations-stats').innerHTML = statsCompleteHtml;
     document.getElementById('reservations-stats').style.display = 'block';
 
-    // ✅ DETERMINAR TEXTO DEL FILTRO APLICADO MEJORADO
+    // ✅ DETERMINAR TEXTO DEL FILTRO APLICADO MEJORADO CON HORARIOS
     const tipoFechaText = data.filtros.tipo_fecha === 'compra' ? 'Fecha de Compra' : 'Fecha de Servicio';
 
     let estadoText = '';
@@ -2743,7 +2742,7 @@ function renderReservationsReportWithFilters(data) {
             break;
     }
 
-    // ✅ NUEVO: TEXTO DEL FILTRO DE AGENCIAS
+    // Texto del filtro de agencias
     let agencyText = '';
     switch (data.filtros.agency_filter) {
         case 'sin_agencia':
@@ -2754,9 +2753,8 @@ function renderReservationsReportWithFilters(data) {
             break;
         default:
             if (data.filtros.agency_filter && data.filtros.agency_filter !== 'todas') {
-                // Buscar el nombre de la agencia en el select
                 const agencySelect = document.getElementById('agency-filtro');
-                const selectedOption = agencySelect.querySelector(`option[value="${data.filtros.agency_filter}"]`);
+                const selectedOption = agencySelect ? agencySelect.querySelector(`option[value="${data.filtros.agency_filter}"]`) : null;
                 if (selectedOption) {
                     agencyText = ` - ${selectedOption.textContent}`;
                 } else {
@@ -2766,10 +2764,48 @@ function renderReservationsReportWithFilters(data) {
             break;
     }
 
+    // ✅ TEXTO DEL FILTRO DE HORARIOS - MEJORADO
+    let horariosText = '';
+    const scheduleSelect = document.getElementById('schedule-filtro');
+    
+    if (scheduleSelect && scheduleSelect.selectedOptions.length > 0) {
+        const selectedSchedules = [];
+        let todosMarcado = false;
+
+        for (let option of scheduleSelect.selectedOptions) {
+            if (option.value === 'todos') {
+                todosMarcado = true;
+                break;
+            } else if (option.value && option.value !== '') {
+                try {
+                    const schedule = JSON.parse(option.value.replace(/&quot;/g, '"'));
+                    const horaFormato = schedule.hora.substring(0, 5);
+                    const horaVueltaText = schedule.hora_vuelta && schedule.hora_vuelta !== '00:00:00' ?
+                        ` (vuelta ${schedule.hora_vuelta.substring(0, 5)})` : '';
+                    selectedSchedules.push(`${horaFormato}${horaVueltaText}`);
+                } catch (e) {
+                    console.warn('Error parsing schedule text:', option.value);
+                }
+            }
+        }
+
+        if (todosMarcado) {
+            horariosText = ' - Todos los horarios';
+        } else if (selectedSchedules.length > 0) {
+            if (selectedSchedules.length === 1) {
+                horariosText = ` - Horario: ${selectedSchedules[0]}`;
+            } else if (selectedSchedules.length <= 3) {
+                horariosText = ` - Horarios: ${selectedSchedules.join(', ')}`;
+            } else {
+                horariosText = ` - ${selectedSchedules.length} horarios seleccionados`;
+            }
+        }
+    }
+
     // Mostrar tabla de reservas
     let tableHtml = `
         <div class="table-header">
-            <h4>Reservas por ${tipoFechaText}: ${data.filtros.fecha_inicio} al ${data.filtros.fecha_fin}${estadoText}${agencyText}</h4>
+            <h4>Reservas por ${tipoFechaText}: ${data.filtros.fecha_inicio} al ${data.filtros.fecha_fin}${estadoText}${agencyText}${horariosText}</h4>
         </div>
         <table class="reservations-table-data">
             <thead>
@@ -2784,8 +2820,7 @@ function renderReservationsReportWithFilters(data) {
                     <th>Personas</th>
                     <th>Total</th>
                     <th>Estado</th>
-                    <th>Agencia</th> <!-- ✅ NUEVA COLUMNA -->
-                    
+                    <th>Agencia</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -2814,6 +2849,8 @@ function renderReservationsReportWithFilters(data) {
             if (reserva.estado === 'pendiente') {
                 estadoClass = 'status-pendiente';
             }
+
+            // Información de agencia
             let agencyInfo = 'Directa';
             let agencyClass = 'agency-direct';
             if (reserva.agency_name) {
@@ -2834,7 +2871,6 @@ function renderReservationsReportWithFilters(data) {
                    <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
                    <td><span class="status-badge ${estadoClass}">${reserva.estado.toUpperCase()}</span></td>
                    <td><span class="agency-badge ${agencyClass}">${agencyInfo}</span></td>
-                   
                    <td>
                         <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
                         
@@ -2843,7 +2879,6 @@ function renderReservationsReportWithFilters(data) {
                     ''
                 }
                         <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
-                        <!-- ✅ AÑADIR ESTE BOTÓN -->
                         <button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
                         ${reserva.estado !== 'cancelada' ?
                     `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
