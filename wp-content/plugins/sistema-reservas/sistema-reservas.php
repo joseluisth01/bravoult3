@@ -1463,14 +1463,71 @@ function handle_pdf_request($mode = 'view')
     }
 }
 
-// Hook para eliminar PDFs temporales
 add_action('delete_temp_pdf', 'delete_temporary_pdf_file');
 
 function delete_temporary_pdf_file($pdf_path)
 {
     if (file_exists($pdf_path)) {
-        unlink($pdf_path);
-        error_log('PDF temporal eliminado: ' . $pdf_path);
+        if (unlink($pdf_path)) {
+            error_log('✅ PDF temporal eliminado: ' . $pdf_path);
+        } else {
+            error_log('❌ Error eliminando PDF temporal: ' . $pdf_path);
+        }
+    } else {
+        error_log('ℹ️ PDF temporal ya no existe: ' . $pdf_path);
+    }
+}
+
+add_action('wp', 'schedule_pdf_cleanup');
+
+function schedule_pdf_cleanup() 
+{
+    if (!wp_next_scheduled('daily_pdf_cleanup')) {
+        wp_schedule_event(time(), 'daily', 'daily_pdf_cleanup');
+    }
+}
+
+add_action('daily_pdf_cleanup', 'cleanup_old_temp_pdfs');
+
+function cleanup_old_temp_pdfs()
+{
+    $upload_dir = wp_upload_dir();
+    $temp_base_dir = $upload_dir['basedir'] . '/reservas-temp';
+    
+    if (!is_dir($temp_base_dir)) {
+        return;
+    }
+    
+    $cleaned = 0;
+    $errors = 0;
+    
+    // Buscar directorios de fechas anteriores a hoy
+    $dirs = glob($temp_base_dir . '/????-??-??', GLOB_ONLYDIR);
+    $today = date('Y-m-d');
+    
+    foreach ($dirs as $dir) {
+        $dir_date = basename($dir);
+        
+        // Si el directorio es de días anteriores, eliminar todo su contenido
+        if ($dir_date < $today) {
+            $files = glob($dir . '/*');
+            foreach ($files as $file) {
+                if (is_file($file)) {
+                    if (unlink($file)) {
+                        $cleaned++;
+                    } else {
+                        $errors++;
+                    }
+                }
+            }
+            
+            // Intentar eliminar el directorio vacío
+            @rmdir($dir);
+        }
+    }
+    
+    if ($cleaned > 0 || $errors > 0) {
+        error_log("🧹 Limpieza de PDFs temporales: $cleaned eliminados, $errors errores");
     }
 }
 
@@ -2212,6 +2269,9 @@ function emergency_create_conductor() {
     
     exit;
 }
+
+
+
 
 // Inicializar el plugin
 new SistemaReservas();

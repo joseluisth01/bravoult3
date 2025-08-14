@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Clase para generar PDFs de billetes idénticos al diseño original - ARREGLADA
+ * Clase para generar PDFs de billetes - VERSIÓN ARREGLADA
  * Archivo: wp-content/plugins/sistema-reservas/includes/class-pdf-generator.php
  */
 
@@ -9,173 +9,233 @@ require_once(ABSPATH . 'wp-admin/includes/file.php');
 
 class ReservasPDFGenerator
 {
-
     private $reserva_data;
-    private $font_path;
+    private $tcpdf_loaded = false;
 
     public function __construct()
     {
-        // ✅ CARGAR TCPDF USANDO COMPOSER AUTOLOADER
-        $this->load_tcpdf();
+        // ✅ CARGAR TCPDF CON MÚLTIPLES FALLBACKS
+        $this->load_tcpdf_with_fallbacks();
     }
 
     /**
-     * ✅ FUNCIÓN MEJORADA PARA CARGAR TCPDF
+     * ✅ FUNCIÓN MEJORADA PARA CARGAR TCPDF CON FALLBACKS
      */
-    private function load_tcpdf()
+    private function load_tcpdf_with_fallbacks()
     {
-        error_log('=== INTENTANDO CARGAR TCPDF ===');
+        error_log('=== CARGANDO TCPDF CON FALLBACKS ===');
 
         // ✅ Verificar si ya está disponible
         if (class_exists('TCPDF')) {
             error_log('✅ TCPDF ya estaba disponible');
+            $this->tcpdf_loaded = true;
             return;
         }
 
-        // ✅ Rutas posibles para TCPDF
-        $possible_paths = array(
-            RESERVAS_PLUGIN_PATH . 'vendor/autoload.php',
+        // ✅ FALLBACK 1: Intentar cargar desde vendor/autoload.php
+        $autoload_path = RESERVAS_PLUGIN_PATH . 'vendor/autoload.php';
+        if (file_exists($autoload_path)) {
+            error_log("Intentando cargar desde autoload: $autoload_path");
+            try {
+                require_once($autoload_path);
+                if (class_exists('TCPDF')) {
+                    error_log('✅ TCPDF cargado desde autoload');
+                    $this->tcpdf_loaded = true;
+                    return;
+                }
+            } catch (Exception $e) {
+                error_log("❌ Error cargando autoload: " . $e->getMessage());
+            }
+        }
+
+        // ✅ FALLBACK 2: Buscar TCPDF directamente
+        $possible_tcpdf_paths = array(
             RESERVAS_PLUGIN_PATH . 'vendor/tecnickcom/tcpdf/tcpdf.php',
-            RESERVAS_PLUGIN_PATH . 'vendor/tcpdf/tcpdf.php'
+            RESERVAS_PLUGIN_PATH . 'vendor/tcpdf/tcpdf.php',
+            RESERVAS_PLUGIN_PATH . 'includes/tcpdf/tcpdf.php',
+            ABSPATH . 'wp-content/plugins/tcpdf/tcpdf.php'
         );
 
-        foreach ($possible_paths as $path) {
-            error_log("Verificando: $path");
+        foreach ($possible_tcpdf_paths as $path) {
             if (file_exists($path)) {
-                error_log("✅ Encontrado: $path");
+                error_log("Encontrado TCPDF en: $path");
                 try {
                     require_once($path);
                     if (class_exists('TCPDF')) {
                         error_log('✅ TCPDF cargado desde: ' . $path);
+                        $this->tcpdf_loaded = true;
                         return;
                     }
                 } catch (Exception $e) {
-                    error_log("Error cargando $path: " . $e->getMessage());
+                    error_log("❌ Error cargando desde $path: " . $e->getMessage());
                 }
-            } else {
-                error_log("❌ No existe: $path");
             }
         }
 
-        // ✅ Si no encuentra nada, listar contenido del directorio vendor
-        $vendor_dir = RESERVAS_PLUGIN_PATH . 'vendor/';
-        if (is_dir($vendor_dir)) {
-            error_log('Contenido de vendor:');
-            $files = scandir($vendor_dir);
-            foreach ($files as $file) {
-                if ($file != '.' && $file != '..') {
-                    error_log("  - $file");
-                    if (is_dir($vendor_dir . $file)) {
-                        $subfiles = scandir($vendor_dir . $file);
-                        foreach ($subfiles as $subfile) {
-                            if ($subfile != '.' && $subfile != '..') {
-                                error_log("    - $file/$subfile");
-                            }
+        // ✅ FALLBACK 3: Usar TCPDF de WordPress si está disponible
+        if (function_exists('wp_upload_dir')) {
+            $wp_tcpdf_paths = array(
+                ABSPATH . 'wp-includes/class-pdf.php',
+                ABSPATH . 'wp-content/mu-plugins/tcpdf/tcpdf.php'
+            );
+
+            foreach ($wp_tcpdf_paths as $path) {
+                if (file_exists($path)) {
+                    try {
+                        require_once($path);
+                        if (class_exists('TCPDF')) {
+                            error_log('✅ TCPDF cargado desde WordPress: ' . $path);
+                            $this->tcpdf_loaded = true;
+                            return;
                         }
+                    } catch (Exception $e) {
+                        error_log("❌ Error cargando TCPDF de WordPress: " . $e->getMessage());
                     }
                 }
             }
         }
 
-        throw new Exception('TCPDF no se pudo cargar desde ninguna ubicación');
+        error_log('❌ TCPDF no se pudo cargar desde ninguna ubicación');
+        $this->tcpdf_loaded = false;
     }
 
     /**
-     * Generar PDF del billete
+     * Generar PDF del billete con manejo de errores mejorado
      */
     public function generate_ticket_pdf($reserva_data)
     {
         $this->reserva_data = $reserva_data;
 
+        error_log('=== INICIANDO GENERACIÓN DE PDF ===');
+        error_log('Localizador: ' . $reserva_data['localizador']);
+
         // ✅ VERIFICAR QUE TCPDF ESTÁ DISPONIBLE
-        if (!class_exists('TCPDF')) {
-            error_log('❌ TCPDF no está disponible para generar PDF');
-            throw new Exception('TCPDF no está disponible. El PDF no se puede generar.');
-        }
-
-        error_log('✅ Iniciando generación de PDF para localizador: ' . $reserva_data['localizador']);
-
-        // Crear instancia de TCPDF
-        $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
-
-        // Configuración del documento
-        $pdf->SetCreator('Sistema de Reservas');
-        $pdf->SetAuthor('Autocares Bravo Palacios');
-        $pdf->SetTitle('Billete - ' . $reserva_data['localizador']);
-        $pdf->SetSubject('Billete de reserva Medina Azahara');
-
-        // Configurar márgenes
-        $pdf->SetMargins(10, 10, 10);
-        $pdf->SetAutoPageBreak(false, 10);
-
-        // ✅ DESHABILITAR HEADER Y FOOTER AUTOMÁTICOS
-        $pdf->setPrintHeader(false);
-        $pdf->setPrintFooter(false);
-
-        // Añadir página
-        $pdf->AddPage();
-
-        // Generar contenido del billete
-        $this->generate_ticket_content($pdf);
-
-        // Nombre del archivo
-        $filename = 'billete_' . $reserva_data['localizador'] . '_' . date('YmdHis') . '.pdf';
-
-        // ✅ GUARDAR PDF EN DIRECTORIO TEMPORAL DE WORDPRESS
-        $upload_dir = wp_upload_dir();
-        $temp_path = $upload_dir['path'] . '/' . $filename;
-
-        // ✅ VERIFICAR QUE EL DIRECTORIO EXISTE Y ES ESCRIBIBLE
-        if (!wp_mkdir_p($upload_dir['path'])) {
-            error_log('❌ No se pudo crear directorio para PDF: ' . $upload_dir['path']);
-            throw new Exception('No se pudo crear directorio para PDF');
+        if (!$this->tcpdf_loaded || !class_exists('TCPDF')) {
+            error_log('❌ TCPDF no está disponible');
+            throw new Exception('TCPDF no está disponible. No se puede generar el PDF.');
         }
 
         try {
-            $pdf->Output($temp_path, 'F');
-            error_log('✅ PDF generado exitosamente: ' . $temp_path);
-
-            // ✅ VERIFICAR QUE EL ARCHIVO SE CREÓ CORRECTAMENTE
-            if (!file_exists($temp_path) || filesize($temp_path) == 0) {
-                error_log('❌ PDF no se generó correctamente o está vacío');
-                throw new Exception('Error generando PDF: archivo vacío o no creado');
+            // ✅ CREAR DIRECTORIO TEMPORAL SEGURO
+            $temp_dir = $this->create_secure_temp_dir();
+            if (!$temp_dir) {
+                throw new Exception('No se pudo crear directorio temporal para PDF');
             }
 
-            error_log('✅ PDF verificado - Tamaño: ' . filesize($temp_path) . ' bytes');
+            // Crear instancia de TCPDF con configuración específica
+            $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
+
+            // ✅ CONFIGURACIÓN MEJORADA DEL DOCUMENTO
+            $pdf->SetCreator('Sistema de Reservas - Autocares Bravo');
+            $pdf->SetAuthor('Autocares Bravo Palacios');
+            $pdf->SetTitle('Billete - ' . $reserva_data['localizador']);
+            $pdf->SetSubject('Billete de reserva Medina Azahara');
+            $pdf->SetKeywords('billete, reserva, medina azahara, autobus');
+
+            // Configurar márgenes
+            $pdf->SetMargins(10, 10, 10);
+            $pdf->SetAutoPageBreak(false, 10);
+
+            // ✅ DESHABILITAR HEADER Y FOOTER AUTOMÁTICOS
+            $pdf->setPrintHeader(false);
+            $pdf->setPrintFooter(false);
+
+            // Añadir página
+            $pdf->AddPage();
+
+            // Generar contenido del billete
+            $this->generate_ticket_content($pdf);
+
+            // ✅ NOMBRE DE ARCHIVO ÚNICO Y SEGURO
+            $timestamp = date('YmdHis');
+            $random = substr(md5(uniqid()), 0, 8);
+            $filename = "billete_{$reserva_data['localizador']}_{$timestamp}_{$random}.pdf";
+            $temp_path = $temp_dir . '/' . $filename;
+
+            error_log("Generando PDF en: $temp_path");
+
+            // ✅ GENERAR PDF CON MANEJO DE ERRORES
+            $pdf->Output($temp_path, 'F');
+
+            // ✅ VERIFICACIONES DE SEGURIDAD
+            if (!file_exists($temp_path)) {
+                throw new Exception('El archivo PDF no se creó correctamente');
+            }
+
+            $file_size = filesize($temp_path);
+            if ($file_size === false || $file_size < 1000) { // PDF debe tener al menos 1KB
+                throw new Exception('PDF generado está vacío o corrupto (tamaño: ' . $file_size . ' bytes)');
+            }
+
+            error_log("✅ PDF generado exitosamente: $temp_path (Tamaño: $file_size bytes)");
+
             return $temp_path;
+
         } catch (Exception $e) {
-            error_log('❌ Error generando PDF: ' . $e->getMessage());
+            error_log('❌ Error en generate_ticket_pdf: ' . $e->getMessage());
+            error_log('❌ Stack trace: ' . $e->getTraceAsString());
             throw new Exception('Error generando PDF: ' . $e->getMessage());
         }
     }
 
     /**
-     * Generar el contenido del billete
+     * ✅ CREAR DIRECTORIO TEMPORAL SEGURO
      */
-private function generate_ticket_content($pdf)
-{
-    // Configurar fuente por defecto
-    $pdf->SetFont('helvetica', '', 9);
+    private function create_secure_temp_dir()
+    {
+        // Usar directorio de uploads de WordPress
+        $upload_dir = wp_upload_dir();
+        $base_temp_dir = $upload_dir['basedir'] . '/reservas-temp';
 
-    // ========== SECCIÓN PRINCIPAL DEL BILLETE ==========
-    $this->generate_main_ticket_section($pdf);
+        // Crear directorio si no existe
+        if (!file_exists($base_temp_dir)) {
+            if (!wp_mkdir_p($base_temp_dir)) {
+                error_log('❌ No se pudo crear directorio base: ' . $base_temp_dir);
+                return false;
+            }
+        }
 
-    // ========== SECCIÓN DEL TALÓN (DESPRENDIBLE) ==========
-    $this->generate_stub_section($pdf);
+        // Crear subdirectorio con fecha actual
+        $today_dir = $base_temp_dir . '/' . date('Y-m-d');
+        if (!file_exists($today_dir)) {
+            if (!wp_mkdir_p($today_dir)) {
+                error_log('❌ No se pudo crear directorio del día: ' . $today_dir);
+                return false;
+            }
+        }
 
-    // ========== CONDICIONES DE COMPRA ==========
-    $this->generate_conditions_section($pdf);
+        // Verificar que es escribible
+        if (!is_writable($today_dir)) {
+            error_log('❌ Directorio no es escribible: ' . $today_dir);
+            return false;
+        }
 
-    // ✅ CÓDIGO DE BARRAS MOVIDO MÁS ABAJO PARA DAR ESPACIO A LA IMAGEN
-    $this->generate_simple_barcode($pdf, 270); // Cambiado de 245 a 270
-}
-
-
-
-
+        return $today_dir;
+    }
 
     /**
-     * Sección principal del billete
+     * Generar el contenido del billete (sin cambios)
+     */
+    private function generate_ticket_content($pdf)
+    {
+        // Configurar fuente por defecto
+        $pdf->SetFont('helvetica', '', 9);
+
+        // ========== SECCIÓN PRINCIPAL DEL BILLETE ==========
+        $this->generate_main_ticket_section($pdf);
+
+        // ========== SECCIÓN DEL TALÓN (DESPRENDIBLE) ==========
+        $this->generate_stub_section($pdf);
+
+        // ========== CONDICIONES DE COMPRA ==========
+        $this->generate_conditions_section($pdf);
+
+        // ✅ CÓDIGO DE BARRAS
+        $this->generate_simple_barcode($pdf, 270);
+    }
+
+    /**
+     * Sección principal del billete (sin cambios)
      */
     private function generate_main_ticket_section($pdf)
     {
@@ -277,7 +337,7 @@ private function generate_ticket_content($pdf)
         $pdf->SetX(15);
         $pdf->Cell(30, 5, 'Hora de Vuelta:', 0, 0, 'L');
         $pdf->SetFont('helvetica', '', 9);
-        $pdf->Cell(40, 5, substr($this->reserva_data['hora_vuelta'], 0, 5) . ' hrs', 0, 1, 'L');
+        $pdf->Cell(40, 5, substr($this->reserva_data['hora_vuelta'] ?? '', 0, 5) . ' hrs', 0, 1, 'L');
 
         $pdf->SetFont('helvetica', 'B', 9);
         $pdf->SetX(15);
@@ -339,7 +399,7 @@ private function generate_ticket_content($pdf)
     }
 
     /**
-     * Sección del talón (parte desprendible)
+     * Sección del talón (parte desprendible) - sin cambios
      */
     private function generate_stub_section($pdf)
     {
@@ -369,7 +429,7 @@ private function generate_ticket_content($pdf)
         $pdf->Cell(25, 4, 'Producto:', 0, 0, 'L');
         $pdf->SetFont('helvetica', '', 7);
         $pdf->SetX(152);
-        $pdf->MultiCell(40, 3, 'TAQ BUS Madinat Al-Zahra + Lanzadera (' . substr($this->reserva_data['hora'], 0, 5) . ' / ' . substr($this->reserva_data['hora_vuelta'], 0, 5) . ' hrs)', 0, 'L');
+        $pdf->MultiCell(40, 3, 'TAQ BUS Madinat Al-Zahra + Lanzadera (' . substr($this->reserva_data['hora'], 0, 5) . ' / ' . substr($this->reserva_data['hora_vuelta'] ?? '', 0, 5) . ' hrs)', 0, 'L');
 
         $pdf->SetFont('helvetica', 'B', 8);
         $pdf->SetXY(127, $y_start + 30);
@@ -404,145 +464,190 @@ private function generate_ticket_content($pdf)
         $pdf->SetX(127);
         $pdf->Cell(66, 3, 'INGENIERO BARBUDO, S/N - CORDOBA - CIF: B14485817 - Teléfono: 957429034', 0, 1, 'L');
 
-
-$pdf->SetFont('helvetica', '', 7);
-$pdf->SetXY(127, $y_start + 63);
-$fecha_formato = date('Ymd', strtotime($this->reserva_data['fecha']));
-$codigo_completo = $this->reserva_data['localizador'] . $fecha_formato;
-$pdf->Cell(66, 3, 'Código: ' . $codigo_completo, 0, 1, 'C');
+        $pdf->SetFont('helvetica', '', 7);
+        $pdf->SetXY(127, $y_start + 63);
+        $fecha_formato = date('Ymd', strtotime($this->reserva_data['fecha']));
+        $codigo_completo = $this->reserva_data['localizador'] . $fecha_formato;
+        $pdf->Cell(66, 3, 'Código: ' . $codigo_completo, 0, 1, 'C');
     }
 
     /**
-     * Sección de condiciones de compra
+     * Sección de condiciones de compra - sin cambios
      */
-private function generate_conditions_section($pdf)
-{
-    $y_start = 155;
+    private function generate_conditions_section($pdf)
+    {
+        $y_start = 155;
 
-    $pdf->SetFont('helvetica', 'B', 9);
-    $pdf->SetXY(15, $y_start);
-    $pdf->Cell(0, 5, 'CONDICIONES DE COMPRA', 0, 1, 'C');
+        $pdf->SetFont('helvetica', 'B', 9);
+        $pdf->SetXY(15, $y_start);
+        $pdf->Cell(0, 5, 'CONDICIONES DE COMPRA', 0, 1, 'C');
 
-    $pdf->SetFont('helvetica', '', 6);
-    $conditions_text = "La adquisición de la entrada supone la aceptación de las siguientes condiciones- No se admiten devoluciones ni cambios de entradas.- La Organización no garantiza la autenticidad de la entrada si ésta no ha sido adquirida en los puntos oficiales de venta.- En caso de suspensión del servicio, la devolución se efectuará por la Organización dentro del plazo de 15 días de la fecha de celebración.- En caso de suspensión del servicio, una vez iniciado, no habrá derecho a devolución del importe de la entrada.- La Organización no se responsabiliza de posibles demoras ajenas a su voluntad.- Es potestad de la Organización permitir la entrada al servicio una vez haya empezado.- La admisión se supedita a la disposición de la entrada en buenas condiciones.- Debe de estar en el punto de salida 10 minutos antes de la hora prevista de partida.";
+        $pdf->SetFont('helvetica', '', 6);
+        $conditions_text = "La adquisición de la entrada supone la aceptación de las siguientes condiciones- No se admiten devoluciones ni cambios de entradas.- La Organización no garantiza la autenticidad de la entrada si ésta no ha sido adquirida en los puntos oficiales de venta.- En caso de suspensión del servicio, la devolución se efectuará por la Organización dentro del plazo de 15 días de la fecha de celebración.- En caso de suspensión del servicio, una vez iniciado, no habrá derecho a devolución del importe de la entrada.- La Organización no se responsabiliza de posibles demoras ajenas a su voluntad.- Es potestad de la Organización permitir la entrada al servicio una vez haya empezado.- La admisión se supedita a la disposición de la entrada en buenas condiciones.- Debe de estar en el punto de salida 10 minutos antes de la hora prevista de partida.";
 
-    $pdf->SetXY(15, $y_start + 7);
-    $pdf->MultiCell(180, 3, $conditions_text, 1, 'J');
+        $pdf->SetXY(15, $y_start + 7);
+        $pdf->MultiCell(180, 3, $conditions_text, 1, 'J');
 
-    $pdf->SetFont('helvetica', 'B', 7);
-    $pdf->SetXY(15, $y_start + 30);
-    $pdf->Cell(0, 3, 'Mantenga la integridad de toda la hoja, sin cortar ninguna de las zonas impresas.', 0, 1, 'C');
-    
-    // ✅ AÑADIR IMAGEN DESPUÉS DEL TEXTO
-    $this->add_bottom_image($pdf, $y_start + 35);
-}
+        $pdf->SetFont('helvetica', 'B', 7);
+        $pdf->SetXY(15, $y_start + 30);
+        $pdf->Cell(0, 3, 'Mantenga la integridad de toda la hoja, sin cortar ninguna de las zonas impresas.', 0, 1, 'C');
 
-private function add_bottom_image($pdf, $y_position)
-{
-    $image_url = 'https://autobusmedinaazahara.com/wp-content/uploads/2025/08/Vector-10-1.png';
-    
-    try {
-        // Verificar si la imagen existe
-        $image_data = @file_get_contents($image_url);
-        
-        if ($image_data === false) {
-            error_log('❌ No se pudo cargar la imagen desde: ' . $image_url);
-            return;
-        }
-        
-        // Crear archivo temporal
-        $temp_dir = sys_get_temp_dir();
-        $temp_image = $temp_dir . '/lienzoticket_' . uniqid() . '.png';
-        
-        if (file_put_contents($temp_image, $image_data) === false) {
-            error_log('❌ No se pudo crear archivo temporal para la imagen');
-            return;
-        }
-        
-        // Obtener dimensiones de la imagen
-        $image_info = getimagesize($temp_image);
-        if ($image_info === false) {
-            error_log('❌ No se pudieron obtener las dimensiones de la imagen');
-            unlink($temp_image);
-            return;
-        }
-        
-        $original_width = $image_info[0];
-        $original_height = $image_info[1];
-        
-        // Calcular dimensiones para el PDF (ocupar todo el ancho disponible)
-        $pdf_width = 180; // Ancho disponible en el PDF (210mm - 15mm margen izq - 15mm margen der)
-        $pdf_height = ($original_height * $pdf_width) / $original_width;
-        
-        // Verificar que la imagen no se salga de la página
-        $available_height = 297 - $y_position - 10; // Altura A4 - posición actual - margen inferior
-        
-        if ($pdf_height > $available_height) {
-            // Si es muy alta, ajustar proporcionalmente
-            $pdf_height = $available_height;
-            $pdf_width = ($original_width * $pdf_height) / $original_height;
-        }
-        
-        // Centrar la imagen horizontalmente
-        $x_position = 15 + (180 - $pdf_width) / 2;
-        
-        // Insertar imagen en el PDF
-        $pdf->Image($temp_image, $x_position, $y_position, $pdf_width, $pdf_height, 'PNG');
-        
-        // Limpiar archivo temporal
-        unlink($temp_image);
-        
-        error_log('✅ Imagen añadida al PDF correctamente');
-        
-    } catch (Exception $e) {
-        error_log('❌ Error añadiendo imagen al PDF: ' . $e->getMessage());
-        
-        // Limpiar archivo temporal si existe
-        if (isset($temp_image) && file_exists($temp_image)) {
-            unlink($temp_image);
+        // ✅ AÑADIR IMAGEN DESPUÉS DEL TEXTO
+        $this->add_bottom_image($pdf, $y_start + 35);
+    }
+
+    /**
+     * ✅ FUNCIÓN MEJORADA PARA AÑADIR IMAGEN
+     */
+    private function add_bottom_image($pdf, $y_position)
+    {
+        $image_url = 'https://autobusmedinaazahara.com/wp-content/uploads/2025/08/Vector-10-1.png';
+
+        try {
+            // ✅ USAR cURL O file_get_contents CON TIMEOUT
+            $image_data = $this->download_image_safely($image_url);
+
+            if ($image_data === false) {
+                error_log('❌ No se pudo descargar la imagen desde: ' . $image_url);
+                return;
+            }
+
+            // ✅ CREAR ARCHIVO TEMPORAL EN DIRECTORIO SEGURO
+            $temp_dir = $this->create_secure_temp_dir();
+            if (!$temp_dir) {
+                error_log('❌ No se pudo crear directorio temporal para imagen');
+                return;
+            }
+
+            $temp_image = $temp_dir . '/footer_image_' . uniqid() . '.png';
+
+            if (file_put_contents($temp_image, $image_data) === false) {
+                error_log('❌ No se pudo crear archivo temporal para la imagen');
+                return;
+            }
+
+            // Obtener dimensiones de la imagen
+            $image_info = @getimagesize($temp_image);
+            if ($image_info === false) {
+                error_log('❌ No se pudieron obtener las dimensiones de la imagen');
+                @unlink($temp_image);
+                return;
+            }
+
+            $original_width = $image_info[0];
+            $original_height = $image_info[1];
+
+            // Calcular dimensiones para el PDF
+            $pdf_width = 180; // Ancho disponible
+            $pdf_height = ($original_height * $pdf_width) / $original_width;
+
+            // Verificar que no se salga de la página
+            $available_height = 297 - $y_position - 10;
+
+            if ($pdf_height > $available_height) {
+                $pdf_height = $available_height;
+                $pdf_width = ($original_width * $pdf_height) / $original_height;
+            }
+
+            // Centrar la imagen horizontalmente
+            $x_position = 15 + (180 - $pdf_width) / 2;
+
+            // Insertar imagen en el PDF
+            $pdf->Image($temp_image, $x_position, $y_position, $pdf_width, $pdf_height, 'PNG');
+
+            // Limpiar archivo temporal
+            @unlink($temp_image);
+
+            error_log('✅ Imagen añadida al PDF correctamente');
+
+        } catch (Exception $e) {
+            error_log('❌ Error añadiendo imagen al PDF: ' . $e->getMessage());
+
+            // Limpiar archivo temporal si existe
+            if (isset($temp_image) && file_exists($temp_image)) {
+                @unlink($temp_image);
+            }
         }
     }
-}
 
     /**
-     * Generar código de barras simple en el pie del billete
+     * ✅ DESCARGAR IMAGEN DE FORMA SEGURA
      */
-private function generate_simple_barcode($pdf, $y_start)
-{
-    
-    // ✅ USAR LOCALIZADOR NUMÉRICO + FECHA (formato YYYYMMDD)
-    $fecha_formato = date('Ymd', strtotime($this->reserva_data['fecha']));
-    $barcode_data = $this->reserva_data['localizador'] . $fecha_formato;
-    
-    error_log("Generando código de barras: Localizador=" . $this->reserva_data['localizador'] . " + Fecha=" . $fecha_formato . " = " . $barcode_data);
+    private function download_image_safely($url, $timeout = 10)
+    {
+        // Intentar con cURL primero
+        if (function_exists('curl_init')) {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (compatible; Sistema Reservas PDF Generator)');
 
-    // Posicionar código de barras
-    $pdf->SetXY(15, $y_start);
+            $data = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-    // ✅ USAR CODE 128 (mejor para combinación de números)
-    $style = array(
-        'border' => false,
-        'hpadding' => 0,
-        'vpadding' => 0,
-        'fgcolor' => array(0, 0, 0),
-        'bgcolor' => false,
-        'text' => true,
-        'font' => 'helvetica',
-        'fontsize' => 8,
-        'stretchtext' => 4
-    );
+            if ($data !== false && $http_code === 200) {
+                return $data;
+            }
+        }
 
-    // Generar código de barras CODE 128 (mejor para números largos)
-    $pdf->write1DBarcode($barcode_data, 'C128', 15, $y_start, 120, 15, 0.4, $style, 'N');
+        // Fallback a file_get_contents con contexto
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => $timeout,
+                'user_agent' => 'Mozilla/5.0 (compatible; Sistema Reservas PDF Generator)'
+            ]
+        ]);
 
-    // Total a la derecha del código de barras
-    $pdf->SetFont('helvetica', 'B', 12);
-    $pdf->SetXY(150, $y_start + 5);
-    $pdf->Cell(40, 6, 'Total: ' . number_format($this->reserva_data['precio_final'], 2) . ' €', 0, 1, 'R');
-}
+        return @file_get_contents($url, false, $context);
+    }
 
     /**
-     * Métodos auxiliares
+     * Generar código de barras simple - sin cambios
+     */
+    private function generate_simple_barcode($pdf, $y_start)
+    {
+        // ✅ USAR LOCALIZADOR NUMÉRICO + FECHA (formato YYYYMMDD)
+        $fecha_formato = date('Ymd', strtotime($this->reserva_data['fecha']));
+        $barcode_data = $this->reserva_data['localizador'] . $fecha_formato;
+
+        error_log("Generando código de barras: Localizador=" . $this->reserva_data['localizador'] . " + Fecha=" . $fecha_formato . " = " . $barcode_data);
+
+        // Posicionar código de barras
+        $pdf->SetXY(15, $y_start);
+
+        // ✅ USAR CODE 128 (mejor para combinación de números)
+        $style = array(
+            'border' => false,
+            'hpadding' => 0,
+            'vpadding' => 0,
+            'fgcolor' => array(0, 0, 0),
+            'bgcolor' => false,
+            'text' => true,
+            'font' => 'helvetica',
+            'fontsize' => 8,
+            'stretchtext' => 4
+        );
+
+        try {
+            // Generar código de barras CODE 128
+            $pdf->write1DBarcode($barcode_data, 'C128', 15, $y_start, 120, 15, 0.4, $style, 'N');
+        } catch (Exception $e) {
+            error_log('❌ Error generando código de barras: ' . $e->getMessage());
+            // Continuar sin código de barras si falla
+        }
+
+        // Total a la derecha del código de barras
+        $pdf->SetFont('helvetica', 'B', 12);
+        $pdf->SetXY(150, $y_start + 5);
+        $pdf->Cell(40, 6, 'Total: ' . number_format($this->reserva_data['precio_final'], 2) . ' €', 0, 1, 'R');
+    }
+
+    /**
+     * Métodos auxiliares - sin cambios
      */
     private function format_date($date_string)
     {
