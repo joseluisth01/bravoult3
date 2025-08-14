@@ -9985,7 +9985,7 @@ function loadAgencyReservationsByDateWithFilters(page = 1) {
  * Renderizar reporte de reservas de agencia
  */
 function renderAgencyReservationsReportWithFilters(data) {
-    // Mostrar estadísticas principales
+    // Mostrar estadísticas principales (sin cambios)
     const statsHtml = `
         <div class="stats-cards">
             <div class="stat-card">
@@ -10054,63 +10054,20 @@ function renderAgencyReservationsReportWithFilters(data) {
             estadoText = ' (solo canceladas)';
             break;
         case 'todas':
-            estadoText = ' (todas las reservas)';
+            estadoText = ' (todas mis reservas)';
             break;
     }
 
-    let agencyText = '';
-    switch (data.filtros.agency_filter) {
-        case 'sin_agencia':
-            agencyText = ' - Reservas directas';
-            break;
-        case 'todas':
-            agencyText = ' - Todas las agencias';
-            break;
-        default:
-            if (data.filtros.agency_filter && data.filtros.agency_filter !== 'todas') {
-                const agencySelect = document.getElementById('agency-filtro');
-                const selectedOption = agencySelect.querySelector(`option[value="${data.filtros.agency_filter}"]`);
-                if (selectedOption) {
-                    agencyText = ` - ${selectedOption.textContent}`;
-                } else {
-                    agencyText = ` - Agencia ID: ${data.filtros.agency_filter}`;
-                }
-            }
-            break;
-    }
+    // ✅ PARA AGENCIAS: NO HAY FILTRO DE AGENCIAS, SOLO MOSTRAR "Mis reservas"
+    let agencyText = ' - Mis reservas';
 
-    // ✅ NUEVO: TEXTO DEL FILTRO DE HORARIOS
+    // ✅ PARA AGENCIAS: NO HAY FILTRO DE HORARIOS TAMPOCO
     let horariosText = '';
-    const scheduleSelect = document.getElementById('schedule-filtro');
-    if (scheduleSelect && scheduleSelect.selectedOptions.length > 0) {
-        const selectedSchedules = [];
-
-        for (let option of scheduleSelect.selectedOptions) {
-            if (option.value === 'todos') {
-                horariosText = ' - Todos los horarios';
-                break;
-            } else if (option.value && option.value !== '') {
-                try {
-                    const schedule = JSON.parse(option.value.replace(/&quot;/g, '"'));
-                    const horaFormato = schedule.hora.substring(0, 5);
-                    const horaVueltaText = schedule.hora_vuelta && schedule.hora_vuelta !== '00:00:00' ?
-                        `-${schedule.hora_vuelta.substring(0, 5)}` : '';
-                    selectedSchedules.push(`${horaFormato}${horaVueltaText}`);
-                } catch (e) {
-                    console.warn('Error parsing schedule text:', option.value);
-                }
-            }
-        }
-
-        if (selectedSchedules.length > 0) {
-            horariosText = ` - Horarios: ${selectedSchedules.join(', ')}`;
-        }
-    }
 
     // Mostrar tabla de reservas
     let tableHtml = `
         <div class="table-header">
-            <h4>Reservas por ${tipoFechaText}: ${data.filtros.fecha_inicio} al ${data.filtros.fecha_fin}${estadoText}${agencyText}${horariosText}</h4>
+            <h4>Mis Reservas por ${tipoFechaText}: ${data.filtros.fecha_inicio} al ${data.filtros.fecha_fin}${estadoText}${agencyText}${horariosText}</h4>
         </div>
         <table class="reservations-table-data">
             <thead>
@@ -10161,19 +10118,19 @@ function renderAgencyReservationsReportWithFilters(data) {
                    <td><small>${fechaCompraFormateada}</small></td>
                    <td>${reserva.hora}</td>
                    <td>${reserva.nombre} ${reserva.apellidos}</td>
-                   <td>${reserva.email}</td>
+                   <td>${reserva.email || 'No proporcionado'}</td>
                    <td>${reserva.telefono}</td>
                    <td title="Adultos: ${reserva.adultos}, Residentes: ${reserva.residentes}, Niños 5-12: ${reserva.ninos_5_12}, Menores: ${reserva.ninos_menores}">${personasDetalle}</td>
                    <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
                    <td><span class="status-badge ${estadoClass}">${reserva.estado.toUpperCase()}</span></td>
                    <td>
-    <button class="btn-small btn-info" onclick="showAgencyReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
-    <button class="btn-small btn-success" onclick="downloadAgencyTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
-    ${reserva.estado !== 'cancelada' ?
+                        <button class="btn-small btn-info" onclick="showAgencyReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
+                        <button class="btn-small btn-success" onclick="downloadAgencyTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
+                        ${reserva.estado !== 'cancelada' ?
                     `<button class="btn-small btn-warning" onclick="showAgencyCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Solicitar cancelación">❌</button>` :
                     `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
                 }
-</td>
+                    </td>
                </tr>
            `;
         });
