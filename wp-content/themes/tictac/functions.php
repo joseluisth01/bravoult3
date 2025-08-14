@@ -364,7 +364,17 @@ if (!function_exists('slider_scripts')) {
 
 
 
+// Añade esto al final de functions.php de tu tema o en el plugin
+add_action('wp_mail_failed', function($wp_error) {
+    error_log('❌ WP_MAIL FAILED: ' . $wp_error->get_error_message());
+});
 
+add_action('phpmailer_init', function($phpmailer) {
+    error_log('📧 PHPMailer configurado - SMTP: ' . ($phpmailer->isSMTP() ? 'SÍ' : 'NO'));
+    error_log('📧 Host: ' . $phpmailer->Host);
+    error_log('📧 Puerto: ' . $phpmailer->Port);
+    error_log('📧 From: ' . $phpmailer->From);
+});
 
 
 

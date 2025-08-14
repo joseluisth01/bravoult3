@@ -118,96 +118,111 @@ class ReservasEmailService
         }
     }
 
+
+    /**
+ * FUNCIÓN TEMPORAL - Enviar email SIN PDF para testing
+ */
+public static function send_customer_confirmation_no_pdf($reserva_data)
+{
+    error_log("=== TESTING EMAIL SIN PDF ===");
+    
+    $config = self::get_email_config();
+    
+    $to = $reserva_data['email'];
+    $subject = "TEST - Confirmación de Reserva SIN PDF - Localizador: " . $reserva_data['localizador'];
+    
+    $message = self::build_customer_email_template($reserva_data);
+    
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        'From: ' . $config['nombre_remitente'] . ' <' . $config['email_remitente'] . '>'
+    );
+    
+    error_log("=== ENVIANDO EMAIL SIN PDF ===");
+    error_log("To: " . $to);
+    error_log("From: " . $config['email_remitente']);
+    
+    $sent = wp_mail($to, $subject, $message, $headers);
+    
+    error_log("Email SIN PDF enviado: " . ($sent ? 'SÍ' : 'NO'));
+    
+    if ($sent) {
+        error_log("✅ Email SIN PDF enviado correctamente");
+        return array('success' => true, 'message' => 'Email sin PDF enviado correctamente');
+    } else {
+        error_log("❌ Error enviando email sin PDF");
+        return array('success' => false, 'message' => 'Error enviando email sin PDF');
+    }
+}
+
     /**
      * Enviar email de confirmación al cliente CON PDF ADJUNTO
      */
     public static function send_customer_confirmation($reserva_data)
-    {
-        $config = self::get_email_config();
+{
+    error_log("=== INICIANDO ENVÍO EMAIL CLIENTE ===");
+    error_log("Email destino: " . $reserva_data['email']);
+    
+    $config = self::get_email_config();
+    error_log("Configuración email: " . print_r($config, true));
 
-        error_log("=== INICIANDO ENVÍO EMAIL CLIENTE ===");
-        error_log("Email destino: " . $reserva_data['email']);
+    $to = $reserva_data['email'];
+    $subject = "Confirmación de Reserva - Localizador: " . $reserva_data['localizador'];
 
-        $config = self::get_email_config();
-        error_log("Configuración email: " . print_r($config, true));
+    $message = self::build_customer_email_template($reserva_data);
 
-        $to = $reserva_data['email'];
-        $subject = "Confirmación de Reserva - Localizador: " . $reserva_data['localizador'];
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        'From: ' . $config['nombre_remitente'] . ' <' . $config['email_remitente'] . '>'
+    );
 
+    // ✅ TEMPORAL: COMENTAR GENERACIÓN DE PDF PARA TESTING
+    /*
+    $attachments = array();
+    try {
+        error_log('=== INICIANDO GENERACIÓN DE PDF ===');
+        $pdf_path = self::generate_ticket_pdf($reserva_data);
+        error_log('PDF generado en: ' . $pdf_path);
 
-        $message = self::build_customer_email_template($reserva_data);
+        if ($pdf_path && file_exists($pdf_path)) {
+            $file_size = filesize($pdf_path);
+            error_log("✅ PDF existe - Tamaño: $file_size bytes");
 
-        $headers = array(
-            'Content-Type: text/html; charset=UTF-8',
-            'From: ' . $config['nombre_remitente'] . ' <' . $config['email_remitente'] . '>'
-        );
-
-        // ✅ ENCONTRAR ESTAS LÍNEAS (alrededor de la línea 50-70):
-        $attachments = array();
-        try {
-            error_log('=== INICIANDO GENERACIÓN DE PDF ===');
-            $pdf_path = self::generate_ticket_pdf($reserva_data);
-            error_log('PDF generado en: ' . $pdf_path);
-
-            if ($pdf_path && file_exists($pdf_path)) {
-                $file_size = filesize($pdf_path);
-                error_log("✅ PDF existe - Tamaño: $file_size bytes");
-
-                if ($file_size > 0) {
-                    $attachments[] = $pdf_path;
-                    error_log("✅ PDF añadido a attachments: " . $pdf_path);
-                } else {
-                    error_log("❌ PDF está vacío");
-                }
+            if ($file_size > 0) {
+                $attachments[] = $pdf_path;
+                error_log("✅ PDF añadido a attachments: " . $pdf_path);
             } else {
-                error_log("❌ PDF no existe en: $pdf_path");
+                error_log("❌ PDF está vacío");
             }
-        } catch (Exception $e) {
-            error_log("❌ Error generando PDF: " . $e->getMessage());
-            error_log("❌ Stack trace: " . $e->getTraceAsString());
-            // Continuar enviando email sin PDF si hay error
-        }
-
-        // ✅ AÑADIR DEBUG ANTES DE ENVIAR
-        error_log("=== ENVIANDO EMAIL ===");
-        error_log("To: " . $to);
-        error_log("Subject: " . $subject);
-        error_log("Attachments: " . print_r($attachments, true));
-
-        $sent = wp_mail($to, $subject, $message, $headers, $attachments);
-
-        error_log("Email enviado: " . ($sent ? 'SÍ' : 'NO'));
-
-        // ✅ NO ELIMINAR EL PDF HASTA DESPUÉS DEL EMAIL
-        if ($sent) {
-            error_log("✅ Email enviado al cliente: " . $to . " (con PDF: " . (!empty($attachments) ? 'SÍ' : 'NO') . ")");
-
-            // ✅ AHORA SÍ ELIMINAR ARCHIVOS TEMPORALES
-            if (!empty($attachments)) {
-                foreach ($attachments as $attachment) {
-                    if (file_exists($attachment)) {
-                        unlink($attachment);
-                        error_log("🗑️ Archivo temporal eliminado: " . $attachment);
-                    }
-                }
-            }
-
-            return array('success' => true, 'message' => 'Email enviado al cliente correctamente');
         } else {
-            error_log("❌ Error enviando email al cliente: " . $to);
-
-            // Limpiar archivos aunque falle el email
-            if (!empty($attachments)) {
-                foreach ($attachments as $attachment) {
-                    if (file_exists($attachment)) {
-                        unlink($attachment);
-                    }
-                }
-            }
-
-            return array('success' => false, 'message' => 'Error enviando email al cliente');
+            error_log("❌ PDF no existe en: $pdf_path");
         }
+    } catch (Exception $e) {
+        error_log("❌ Error generando PDF: " . $e->getMessage());
+        error_log("❌ Stack trace: " . $e->getTraceAsString());
     }
+    */
+
+    // ✅ TEMPORAL: ENVIAR SIN ADJUNTOS
+    $attachments = array();
+
+    error_log("=== ENVIANDO EMAIL SIN PDF ===");
+    error_log("To: " . $to);
+    error_log("Subject: " . $subject);
+    error_log("Attachments: NINGUNO (testing)");
+
+    $sent = wp_mail($to, $subject, $message, $headers, $attachments);
+
+    error_log("Email enviado: " . ($sent ? 'SÍ' : 'NO'));
+
+    if ($sent) {
+        error_log("✅ Email enviado al cliente SIN PDF: " . $to);
+        return array('success' => true, 'message' => 'Email enviado al cliente sin PDF');
+    } else {
+        error_log("❌ Error enviando email al cliente: " . $to);
+        return array('success' => false, 'message' => 'Error enviando email al cliente');
+    }
+}
 
     /**
      * ✅ NUEVA FUNCIÓN: Generar PDF del billete
