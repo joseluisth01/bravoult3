@@ -10156,6 +10156,13 @@ function renderAgencyReservationsReportWithFilters(data) {
     }
 }
 
+function get_config(key, default_value = '') {
+    if (typeof defaultConfig !== 'undefined' && defaultConfig && defaultConfig[key]) {
+        return defaultConfig[key].value || default_value;
+    }
+    return default_value;
+}
+
 /**
  * Renderizar paginación de agencia
  */
