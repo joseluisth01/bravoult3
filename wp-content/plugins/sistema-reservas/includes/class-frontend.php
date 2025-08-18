@@ -14,6 +14,9 @@ class ReservasFrontend
         add_action('wp_ajax_nopriv_get_available_services', array($this, 'get_available_services'));
         add_action('wp_ajax_calculate_price', array($this, 'calculate_price'));
         add_action('wp_ajax_nopriv_calculate_price', array($this, 'calculate_price'));
+
+        add_action('wp_ajax_get_configuration', array($this, 'get_configuration'));
+add_action('wp_ajax_nopriv_get_configuration', array($this, 'get_configuration'));
     }
 
     public function enqueue_frontend_assets()

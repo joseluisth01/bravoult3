@@ -904,8 +904,7 @@ public function template_redirect() {
     }
 }
 
-// ✅ SHORTCODE PARA PÁGINA DE CONFIRMACIÓN ACTUALIZADA - EXACTO AL DISEÑO
-add_shortcode('confirmacion_reserva', 'confirmacion_reserva_shortcode');
+
 
 add_shortcode('confirmacion_reserva', 'confirmacion_reserva_shortcode');
 
@@ -1257,67 +1256,96 @@ function confirmacion_reserva_shortcode()
         }
 
         function generateAndViewPDF() {
-            fetch(ajaxurl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    action: 'generate_ticket_pdf_view',
-                    localizador: reservationData.localizador,
-                    nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                hideLoadingModal();
+    console.log('📋 Requesting PDF generation for view...');
+    console.log('🔍 Using localizador:', reservationData.localizador);
+    
+    fetch(ajaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'generate_ticket_pdf_view',
+            localizador: reservationData.localizador,
+            nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
+        })
+    })
+    .then(response => {
+        console.log('📡 Raw response:', response);
+        return response.json();
+    })
+    .then(data => {
+        console.log('📊 Parsed response:', data);
+        hideLoadingModal();
 
-                if (data.success && data.data.pdf_url) {
-                    window.open(data.data.pdf_url, '_blank');
-                } else {
-                    alert('Error generando el comprobante: ' + (data.data || 'Error desconocido'));
-                }
-            })
-            .catch(error => {
-                hideLoadingModal();
-                console.error('Error:', error);
-                alert('Error de conexión al generar el comprobante');
-            });
+        if (data.success && data.data.pdf_url) {
+            console.log('✅ PDF URL received:', data.data.pdf_url);
+            console.log('📁 File exists:', data.data.file_exists);
+            console.log('📏 File size:', data.data.file_size);
+            
+            // Abrir PDF en nueva ventana
+            window.open(data.data.pdf_url, '_blank');
+        } else {
+            console.error('❌ Error in response:', data);
+            alert('Error generando el comprobante: ' + (data.data || 'Error desconocido'));
         }
+    })
+    .catch(error => {
+        hideLoadingModal();
+        console.error('❌ Fetch error:', error);
+        alert('Error de conexión al generar el comprobante');
+    });
+}
 
         function generateAndDownloadPDF() {
-            fetch(ajaxurl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    action: 'generate_ticket_pdf_download',
-                    localizador: reservationData.localizador,
-                    nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                hideLoadingModal();
+    console.log('⬇️ Requesting PDF generation for download...');
+    console.log('🔍 Using localizador:', reservationData.localizador);
+    
+    fetch(ajaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'generate_ticket_pdf_download',
+            localizador: reservationData.localizador,
+            nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
+        })
+    })
+    .then(response => {
+        console.log('📡 Raw response:', response);
+        return response.json();
+    })
+    .then(data => {
+        console.log('📊 Parsed response:', data);
+        hideLoadingModal();
 
-                if (data.success && data.data.pdf_url) {
-                    const link = document.createElement('a');
-                    link.href = data.data.pdf_url;
-                    link.download = `billete_${reservationData.localizador}.pdf`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                } else {
-                    alert('Error preparando la descarga: ' + (data.data || 'Error desconocido'));
-                }
-            })
-            .catch(error => {
-                hideLoadingModal();
-                console.error('Error:', error);
-                alert('Error de conexión al preparar la descarga');
-            });
+        if (data.success && data.data.pdf_url) {
+            console.log('✅ PDF URL received:', data.data.pdf_url);
+            console.log('📁 File exists:', data.data.file_exists);
+            console.log('📏 File size:', data.data.file_size);
+            
+            // Crear enlace de descarga
+            const link = document.createElement('a');
+            link.href = data.data.pdf_url;
+            link.download = `billete_${reservationData.localizador}.pdf`;
+            link.target = '_blank'; // Por si el download falla, al menos se abre
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            console.log('✅ Download triggered');
+        } else {
+            console.error('❌ Error in response:', data);
+            alert('Error preparando la descarga: ' + (data.data || 'Error desconocido'));
         }
+    })
+    .catch(error => {
+        hideLoadingModal();
+        console.error('❌ Fetch error:', error);
+        alert('Error de conexión al preparar la descarga');
+    });
+}
 
         function showLoadingModal(message) {
             let modal = document.getElementById('loading-modal');
@@ -1389,8 +1417,11 @@ function handle_pdf_download_request()
 
 function handle_pdf_request($mode = 'view')
 {
+    error_log("=== PDF REQUEST: $mode ===");
+    
     // Verificar nonce
     if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        error_log('❌ Nonce verification failed');
         wp_send_json_error('Error de seguridad');
         return;
     }
@@ -1398,9 +1429,12 @@ function handle_pdf_request($mode = 'view')
     $localizador = sanitize_text_field($_POST['localizador'] ?? '');
 
     if (empty($localizador)) {
+        error_log('❌ No localizador provided');
         wp_send_json_error('Localizador no proporcionado');
         return;
     }
+
+    error_log("🔍 Searching for reservation: $localizador");
 
     try {
         // Buscar la reserva
@@ -1413,24 +1447,46 @@ function handle_pdf_request($mode = 'view')
         ));
 
         if (!$reserva) {
+            error_log("❌ Reservation not found: $localizador");
             wp_send_json_error('Reserva no encontrada');
             return;
         }
 
+        error_log("✅ Reservation found: " . print_r($reserva, true));
+
         // Obtener datos del servicio
         $table_servicios = $wpdb->prefix . 'reservas_servicios';
         $servicio = $wpdb->get_row($wpdb->prepare(
-            "SELECT precio_adulto, precio_nino, precio_residente FROM $table_servicios WHERE id = %d",
+            "SELECT precio_adulto, precio_nino, precio_residente, hora_vuelta FROM $table_servicios WHERE id = %d",
             $reserva->servicio_id
         ));
 
         // Preparar datos para el PDF
-        $reserva_array = (array) $reserva;
-        if ($servicio) {
-            $reserva_array['precio_adulto'] = $servicio->precio_adulto;
-            $reserva_array['precio_nino'] = $servicio->precio_nino;
-            $reserva_array['precio_residente'] = $servicio->precio_residente;
-        }
+        $reserva_data = array(
+            'localizador' => $reserva->localizador,
+            'fecha' => $reserva->fecha,
+            'hora' => $reserva->hora,
+            'hora_vuelta' => $servicio->hora_vuelta ?? $reserva->hora_vuelta ?? '',
+            'nombre' => $reserva->nombre,
+            'apellidos' => $reserva->apellidos,
+            'email' => $reserva->email,
+            'telefono' => $reserva->telefono,
+            'adultos' => $reserva->adultos,
+            'residentes' => $reserva->residentes,
+            'ninos_5_12' => $reserva->ninos_5_12,
+            'ninos_menores' => $reserva->ninos_menores,
+            'total_personas' => $reserva->total_personas,
+            'precio_base' => $reserva->precio_base,
+            'descuento_total' => $reserva->descuento_total,
+            'precio_final' => $reserva->precio_final,
+            'precio_adulto' => $servicio->precio_adulto ?? 10.00,
+            'precio_nino' => $servicio->precio_nino ?? 5.00,
+            'precio_residente' => $servicio->precio_residente ?? 5.00,
+            'created_at' => $reserva->created_at,
+            'metodo_pago' => $reserva->metodo_pago ?? 'directo'
+        );
+
+        error_log("📋 PDF data prepared: " . print_r($reserva_data, true));
 
         // Generar PDF
         if (!class_exists('ReservasPDFGenerator')) {
@@ -1438,27 +1494,39 @@ function handle_pdf_request($mode = 'view')
         }
 
         $pdf_generator = new ReservasPDFGenerator();
-        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_array);
+        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
 
         if (!$pdf_path || !file_exists($pdf_path)) {
+            error_log('❌ PDF file not created or not found');
             wp_send_json_error('Error generando el PDF');
             return;
         }
 
-        // Crear URL público para el PDF
+        error_log("✅ PDF generated: $pdf_path");
+        error_log("📁 File size: " . filesize($pdf_path) . " bytes");
+
+        // ✅ CREAR URL PÚBLICO CORRECTO
         $upload_dir = wp_upload_dir();
-        $pdf_url = str_replace($upload_dir['path'], $upload_dir['url'], $pdf_path);
+        $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
+        $pdf_url = $upload_dir['baseurl'] . $relative_path;
+
+        error_log("🌐 PDF URL created: $pdf_url");
 
         // Programar eliminación del archivo después de 1 hora
         wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
 
         wp_send_json_success(array(
             'pdf_url' => $pdf_url,
+            'pdf_path' => $pdf_path,
             'mode' => $mode,
-            'localizador' => $localizador
+            'localizador' => $localizador,
+            'file_exists' => file_exists($pdf_path),
+            'file_size' => filesize($pdf_path)
         ));
+
     } catch (Exception $e) {
-        error_log('Error generando PDF para confirmación: ' . $e->getMessage());
+        error_log('❌ Exception in PDF generation: ' . $e->getMessage());
+        error_log('❌ Stack trace: ' . $e->getTraceAsString());
         wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
     }
 }
@@ -1488,6 +1556,63 @@ function schedule_pdf_cleanup()
 }
 
 add_action('daily_pdf_cleanup', 'cleanup_old_temp_pdfs');
+
+// ✅ FUNCIÓN DE PRUEBA PARA DEBUG PDF
+add_action('wp_ajax_test_pdf_frontend', 'test_pdf_frontend');
+add_action('wp_ajax_nopriv_test_pdf_frontend', 'test_pdf_frontend');
+
+function test_pdf_frontend() {
+    error_log('=== TEST PDF FRONTEND ===');
+    
+    // Obtener la reserva más reciente
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    
+    $reserva = $wpdb->get_row(
+        "SELECT * FROM $table_reservas ORDER BY created_at DESC LIMIT 1"
+    );
+    
+    if (!$reserva) {
+        wp_send_json_error('No hay reservas para probar');
+        return;
+    }
+    
+    error_log('Reserva de prueba: ' . print_r($reserva, true));
+    
+    try {
+        if (!class_exists('ReservasPDFGenerator')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
+        }
+        
+        $reserva_data = (array) $reserva;
+        $reserva_data['precio_adulto'] = 10.00;
+        $reserva_data['precio_nino'] = 5.00;
+        $reserva_data['precio_residente'] = 5.00;
+        
+        $pdf_generator = new ReservasPDFGenerator();
+        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
+        
+        if ($pdf_path && file_exists($pdf_path)) {
+            $upload_dir = wp_upload_dir();
+            $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
+            $pdf_url = $upload_dir['baseurl'] . $relative_path;
+            
+            wp_send_json_success(array(
+                'pdf_path' => $pdf_path,
+                'pdf_url' => $pdf_url,
+                'file_exists' => file_exists($pdf_path),
+                'file_size' => filesize($pdf_path),
+                'localizador' => $reserva->localizador
+            ));
+        } else {
+            wp_send_json_error('PDF no se generó correctamente');
+        }
+        
+    } catch (Exception $e) {
+        error_log('Error en test: ' . $e->getMessage());
+        wp_send_json_error('Error: ' . $e->getMessage());
+    }
+}
 
 function cleanup_old_temp_pdfs()
 {
