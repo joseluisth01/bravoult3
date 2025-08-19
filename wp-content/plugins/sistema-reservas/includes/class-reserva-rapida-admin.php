@@ -150,11 +150,12 @@ class ReservasReservaRapidaAdmin
     // ✅ CALCULAR PRECIO BASE CORRECTO
     $precio_base = 0;
     
+    // ❌ AQUÍ ESTÁ EL ERROR - CAMBIAR ESTO:
     if ($is_agency) {
-        // ✅ PARA AGENCIAS: TODOS PAGAN PRECIO ADULTO
+        // ✅ PARA AGENCIAS: CADA TIPO PAGA SU TARIFA CORRESPONDIENTE
         $precio_base += $adultos * $servicio->precio_adulto;
-        $precio_base += $residentes * $servicio->precio_adulto;
-        $precio_base += $ninos_5_12 * $servicio->precio_adulto;
+        $precio_base += $residentes * $servicio->precio_residente;  // ✅ CORREGIDO
+        $precio_base += $ninos_5_12 * $servicio->precio_nino;       // ✅ CORREGIDO
     } else {
         // ✅ PARA ADMIN: CADA TIPO PAGA SU TARIFA
         $precio_base += $adultos * $servicio->precio_adulto;
@@ -642,20 +643,13 @@ class ReservasReservaRapidaAdmin
     // ✅ CALCULAR PRECIO BASE CORRECTO
     $precio_base = 0;
     
-    if ($is_agency) {
-        // ✅ PARA AGENCIAS: TODOS PAGAN PRECIO ADULTO (SIN DESCUENTOS)
-        $precio_base += $datos['adultos'] * $servicio->precio_adulto;
-        $precio_base += $datos['residentes'] * $servicio->precio_adulto;
-        $precio_base += $datos['ninos_5_12'] * $servicio->precio_adulto;
-    } else {
-        // ✅ PARA ADMIN: CADA TIPO PAGA SU TARIFA
-        $precio_base += $datos['adultos'] * $servicio->precio_adulto;
-        $precio_base += $datos['residentes'] * $servicio->precio_residente;
-        $precio_base += $datos['ninos_5_12'] * $servicio->precio_nino;
-    }
+    // ❌ AQUÍ ESTÁ EL SEGUNDO ERROR - CAMBIAR ESTO:
+    // ✅ TANTO PARA AGENCIAS COMO PARA ADMIN: CADA TIPO PAGA SU TARIFA
+    $precio_base += $datos['adultos'] * $servicio->precio_adulto;
+    $precio_base += $datos['residentes'] * $servicio->precio_residente;  // ✅ CORREGIDO
+    $precio_base += $datos['ninos_5_12'] * $servicio->precio_nino;       // ✅ CORREGIDO
 
     $descuento_total = 0;
-
     $descuento_grupo = 0;
     $regla_aplicada = null;
 

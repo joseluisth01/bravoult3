@@ -8462,28 +8462,29 @@ function initAgencyReservaRapida() {
                     </form>
                 </div>
                 
-                <!-- Paso 4: Confirmación -->
-                <div class="admin-step-content" id="agency-step-4" style="display: none;">
-                    <h2>4. Confirmar reserva</h2>
-                    
-                    <div class="admin-confirmation-details">
-                        <div class="admin-confirm-row">
-                            <strong>Fecha:</strong> <span id="agency-confirm-fecha"></span>
-                        </div>
-                        <div class="admin-confirm-row">
-                            <strong>Hora:</strong> <span id="agency-confirm-hora"></span>
-                        </div>
-                        <div class="admin-confirm-row">
-                            <strong>Personas:</strong> <span id="agency-confirm-personas"></span>
-                        </div>
-                        <div class="admin-confirm-row">
-                            <strong>Cliente:</strong> <span id="agency-confirm-cliente"></span>
-                        </div>
-                        <div class="admin-confirm-row">
-                            <strong>Email:</strong> <span id="agency-confirm-email"></span>
-                        </div>
-                    </div>
-                </div>
+                <!-- Paso 4: Confirmación SIN TOTAL -->
+<div class="admin-step-content" id="agency-step-4" style="display: none;">
+    <h2>4. Confirmar reserva</h2>
+    
+    <div class="admin-confirmation-details">
+        <div class="admin-confirm-row">
+            <strong>Fecha:</strong> <span id="agency-confirm-fecha"></span>
+        </div>
+        <div class="admin-confirm-row">
+            <strong>Hora:</strong> <span id="agency-confirm-hora"></span>
+        </div>
+        <div class="admin-confirm-row">
+            <strong>Personas:</strong> <span id="agency-confirm-personas"></span>
+        </div>
+        <div class="admin-confirm-row">
+            <strong>Cliente:</strong> <span id="agency-confirm-cliente"></span>
+        </div>
+        <div class="admin-confirm-row">
+            <strong>Email:</strong> <span id="agency-confirm-email"></span>
+        </div>
+
+    </div>
+</div>
                 
                 <!-- Navegación -->
                 <div class="admin-navigation">
@@ -9180,35 +9181,35 @@ function agencyConfirmReservation() {
     })
         .then(response => response.json())
         .then(data => {
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = originalText;
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = originalText;
 
-            if (data && data.success) {
-                console.log('Reserva de agencia procesada exitosamente:', data.data);
+        if (data && data.success) {
+            console.log('Reserva de agencia procesada exitosamente:', data.data);
 
-                const detalles = data.data.detalles;
-                const emailInfo = formData.get('email') ?
-                    "\n📧 El cliente recibirá la confirmación por email." :
-                    "\nℹ️ No se envió email al cliente (email no proporcionado).";
+            const detalles = data.data.detalles;
+            const emailInfo = formData.get('email') ?
+                "\n📧 El cliente recibirá la confirmación por email." :
+                "\nℹ️ No se envió email al cliente (email no proporcionado).";
 
-                const mensaje = "🎉 ¡RESERVA CREADA EXITOSAMENTE! 🎉\n\n" +
-                    "📋 LOCALIZADOR: " + data.data.localizador + "\n\n" +
-                    "📅 DETALLES:\n" +
-                    "• Fecha: " + detalles.fecha + "\n" +
-                    "• Hora: " + detalles.hora + "\n" +
-                    "• Personas: " + detalles.personas + "\n" +
-                    "• Precio: " + detalles.precio_final + "€\n\n" +
-                    "✅ La reserva ha sido procesada correctamente." + emailInfo + "\n" +
-                    "📧 Tu agencia y el administrador han sido notificados.\n\n" +
-                    "¡Reserva de agencia completada!";
+            // ✅ MENSAJE SIN PRECIO
+            const mensaje = "🎉 ¡RESERVA CREADA EXITOSAMENTE! 🎉\n\n" +
+                "📋 LOCALIZADOR: " + data.data.localizador + "\n\n" +
+                "📅 DETALLES:\n" +
+                "• Fecha: " + detalles.fecha + "\n" +
+                "• Hora: " + detalles.hora + "\n" +
+                "• Personas: " + detalles.personas + "\n\n" +
+                "✅ La reserva ha sido procesada correctamente." + emailInfo + "\n" +
+                "📧 Tu agencia y el administrador han sido notificados.\n\n" +
+                "¡Reserva de agencia completada!";
 
-                alert(mensaje);
+            alert(mensaje);
 
-                setTimeout(() => {
-                    goBackToDashboard();
-                }, 2000);
+            setTimeout(() => {
+                goBackToDashboard();
+            }, 2000);
 
-            } else {
+        }else {
                 console.error('Error procesando reserva de agencia:', data);
                 const errorMsg = data && data.data ? data.data : 'Error desconocido';
                 alert('❌ Error procesando la reserva: ' + errorMsg);
@@ -9321,32 +9322,7 @@ function loadAgencyPrices() {
     if (service) {
         // ✅ MOSTRAR INFORMACIÓN SOBRE PRECIOS SIN DESCUENTO
         let priceInfo = document.getElementById('agency-price-info');
-        if (!priceInfo) {
-            priceInfo = document.createElement('div');
-            priceInfo.id = 'agency-price-info';
-            priceInfo.style.cssText = `
-                background: #fff3cd;
-                color: #856404;
-                padding: 15px;
-                border-radius: 6px;
-                margin-bottom: 20px;
-                border-left: 4px solid #ffc107;
-                font-size: 14px;
-            `;
-            priceInfo.innerHTML = `
-                <strong>💼 Tarifas para Agencias:</strong><br>
-                • Adultos: <strong>${service.precio_adulto}€</strong> (precio completo)<br>
-                • Residentes: <strong>${service.precio_adulto}€</strong> (precio completo)<br>
-                • Niños (5-12): <strong>${service.precio_adulto}€</strong> (precio completo)<br>
-                • Bebés: <strong>GRATIS</strong><br><br>
-                <em>Las agencias no tienen descuentos automáticos aplicados.</em>
-            `;
-            
-            // Insertar en el paso 2
-            const step2 = document.getElementById('agency-step-2');
-            const personsGrid = step2.querySelector('.admin-persons-grid');
-            step2.insertBefore(priceInfo, personsGrid);
-        }
+        
         
         // Solo calcular el precio total
         calculateAgencyTotalPrice();
@@ -9420,38 +9396,36 @@ function calculateAgencyTotalPrice() {
 }
 
 function updateAgencyPricingDisplay(result) {
-    // ✅ PARA AGENCIAS: NO MOSTRAR INFORMACIÓN DE DESCUENTOS
-    // Solo mostrar el precio total final sin descuentos
-    const totalPrice = parseFloat(result.total) || 0;
-    
-    // ✅ MOSTRAR MENSAJE INFORMATIVO SI ES AGENCIA
-    if (result.is_agency) {
-        // Crear mensaje informativo sobre tarifas de agencia
-        let infoMessage = document.getElementById('agency-pricing-info');
-        if (!infoMessage) {
-            infoMessage = document.createElement('div');
-            infoMessage.id = 'agency-pricing-info';
-            infoMessage.style.cssText = `
-                background: #e3f2fd;
-                color: #1976d2;
-                padding: 10px 15px;
-                border-radius: 4px;
-                margin-bottom: 15px;
-                font-size: 14px;
-                border-left: 4px solid #1976d2;
-            `;
-            infoMessage.innerHTML = `
-                <strong>ℹ️ Tarifa de Agencia:</strong> Se aplican precios completos sin descuentos automáticos.
-                Adultos y residentes pagan precio completo. Niños pagan precio completo.
-            `;
-            
-            // Insertar antes del precio total
-            const priceContainer = document.getElementById('agency-total-price').parentElement;
-            priceContainer.insertBefore(infoMessage, priceContainer.firstChild);
+    // ✅ PARA AGENCIAS: NO MOSTRAR PRECIOS
+    const infoMessage = document.getElementById('agency-pricing-info');
+    if (!infoMessage) {
+        const infoMessage = document.createElement('div');
+        infoMessage.id = 'agency-pricing-info';
+        infoMessage.style.cssText = `
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            border-left: 4px solid #1976d2;
+        `;
+        infoMessage.innerHTML = `
+            <strong>ℹ️ Reserva de Agencia:</strong> La tarificación se gestiona según acuerdo comercial.
+        `;
+        
+        // Insertar antes del total (que no se mostrará)
+        const step2 = document.getElementById('agency-step-2');
+        if (step2) {
+            step2.appendChild(infoMessage);
         }
     }
     
-    document.getElementById('agency-total-price').textContent = totalPrice.toFixed(2) + '€';
+    // ✅ NO MOSTRAR PRECIO TOTAL
+    const totalPriceElement = document.getElementById('agency-total-price');
+    if (totalPriceElement) {
+        totalPriceElement.style.display = 'none';
+    }
 }
 
 function clearAgencyPricing() {
@@ -9499,10 +9473,7 @@ function fillAgencyConfirmationData() {
     console.log('=== LLENANDO DATOS DE CONFIRMACIÓN AGENCIA ===');
 
     if (!agencySelectedServiceId || !agencySelectedDate) {
-        console.error('❌ Faltan datos básicos:', {
-            serviceId: agencySelectedServiceId,
-            selectedDate: agencySelectedDate
-        });
+        console.error('❌ Faltan datos básicos');
         return;
     }
 
@@ -9524,7 +9495,7 @@ function fillAgencyConfirmationData() {
 
     const nombre = nombreInput.value.trim();
     const apellidos = apellidosInput.value.trim();
-    const email = emailInput.value.trim() || 'No proporcionado'; // ✅ MANEJAR EMAIL VACÍO
+    const email = emailInput.value.trim() || 'No proporcionado';
     const telefono = telefonoInput.value.trim();
 
     const adultos = parseInt(document.getElementById('agency-adultos').value) || 0;
@@ -9545,7 +9516,7 @@ function fillAgencyConfirmationData() {
         });
         fechaFormateada = fechaFormateada.charAt(0).toUpperCase() + fechaFormateada.slice(1);
     } catch (e) {
-        console.warn('No se pudo formatear la fecha, usando formato original');
+        console.warn('No se pudo formatear la fecha');
     }
 
     // Crear detalle de personas
@@ -9559,17 +9530,14 @@ function fillAgencyConfirmationData() {
         `${totalPersonas} personas (${personasDetalle.join(', ')})` :
         `${totalPersonas} personas`;
 
-    const totalPriceElement = document.getElementById('agency-total-price');
-    const precioTotal = totalPriceElement ? totalPriceElement.textContent : '0€';
-
-    // Actualizar elementos de confirmación
+    // Actualizar elementos de confirmación SIN PRECIO
     const confirmElements = {
         'agency-confirm-fecha': fechaFormateada,
         'agency-confirm-hora': service.hora,
         'agency-confirm-personas': personasTexto,
         'agency-confirm-cliente': `${nombre} ${apellidos}`,
-        'agency-confirm-email': email,
-        'agency-confirm-total': precioTotal
+        'agency-confirm-email': email
+        // ✅ ELIMINAR: 'agency-confirm-total': precioTotal
     };
 
     Object.keys(confirmElements).forEach(elementId => {
@@ -9578,6 +9546,12 @@ function fillAgencyConfirmationData() {
             element.textContent = confirmElements[elementId];
         }
     });
+
+    // ✅ OCULTAR FILA DE TOTAL SI EXISTE
+    const totalRow = document.querySelector('.admin-confirm-row:has(#agency-confirm-total)');
+    if (totalRow) {
+        totalRow.style.display = 'none';
+    }
 }
 
 function selectAgencyDate(dateStr) {
@@ -10065,10 +10039,6 @@ function renderAgencyReservationsReportWithFilters(data) {
                 <h4>Niños (-5)</h4>
                 <div class="stat-number">${data.stats.total_ninos_menores || 0}</div>
             </div>
-            <div class="stat-card">
-                <h4>Mis Ingresos</h4>
-                <div class="stat-number">${parseFloat(data.stats.ingresos_totales || 0).toFixed(2)}€</div>
-            </div>
         </div>
     `;
 
@@ -10137,7 +10107,6 @@ function renderAgencyReservationsReportWithFilters(data) {
                     <th>Email</th>
                     <th>Teléfono</th>
                     <th>Personas</th>
-                    <th>Total</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
@@ -10178,7 +10147,6 @@ function renderAgencyReservationsReportWithFilters(data) {
                    <td>${reserva.email || 'No proporcionado'}</td>
                    <td>${reserva.telefono}</td>
                    <td title="Adultos: ${reserva.adultos}, Residentes: ${reserva.residentes}, Niños 5-12: ${reserva.ninos_5_12}, Menores: ${reserva.ninos_menores}">${personasDetalle}</td>
-                   <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
                    <td><span class="status-badge ${estadoClass}">${reserva.estado.toUpperCase()}</span></td>
                    <td>
                         <button class="btn-small btn-info" onclick="showAgencyReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
@@ -10812,18 +10780,6 @@ function renderAgencyReservationDetails(reserva) {
         `;
     }
 
-    let descuentoInfo = '';
-    if (reserva.regla_descuento_aplicada) {
-        descuentoInfo = `
-            <div class="detail-section">
-                <h4>💰 Información de Descuento</h4>
-                <p><strong>Regla aplicada:</strong> ${reserva.regla_descuento_aplicada.rule_name}</p>
-                <p><strong>Porcentaje:</strong> ${reserva.regla_descuento_aplicada.discount_percentage}%</p>
-                <p><strong>Mínimo personas:</strong> ${reserva.regla_descuento_aplicada.minimum_persons}</p>
-            </div>
-        `;
-    }
-
     const detailsHtml = `
         <div class="reservation-details">
             <div class="details-grid">
@@ -10853,16 +10809,14 @@ function renderAgencyReservationDetails(reserva) {
                     <p><strong>Total personas con plaza:</strong> ${reserva.total_personas}</p>
                 </div>
                 
+                
+                
                 <div class="detail-section">
-    <h4>💰 Información de Precios</h4>
-    <p><strong>Precio base:</strong> ${parseFloat(reserva.precio_base).toFixed(2)}€</p>
-    <p><strong>Descuento total:</strong> ${parseFloat(reserva.descuento_total).toFixed(2)}€</p>
-    <p><strong>Precio final:</strong> <span class="price-final">${parseFloat(reserva.precio_final).toFixed(2)}€</span></p>
-    <p><strong>Método de pago:</strong> ${reserva.metodo_pago}</p>
-</div>
+                    <h4>ℹ️ Información de Facturación</h4>
+                    <p>La facturación se gestiona según el acuerdo comercial establecido con tu agencia.</p>
+                    <p>Para consultas sobre tarifas, contacta con el administrador.</p>
+                </div>
             </div>
-            
-            ${descuentoInfo}
         </div>
     `;
 
