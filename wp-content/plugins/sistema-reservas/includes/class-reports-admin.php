@@ -357,7 +357,7 @@ class ReservasReportsAdmin
 
             $stats_revenue = $wpdb->get_row($wpdb->prepare(
                 "SELECT 
-        SUM(r.precio_base - r.descuento_total) as ingresos_totales  -- ✅ CORREGIDO
+        SUM(r.precio_final) as ingresos_totales
      FROM $table_reservas r
      INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
      $stats_revenue_where",
@@ -496,7 +496,7 @@ class ReservasReportsAdmin
 $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
     "SELECT 
         r.agency_id,
-        SUM(r.precio_base - r.descuento_total) as ingresos_total  -- ✅ CORREGIDO
+        SUM(r.precio_final) as ingresos_totales
      FROM $table_reservas r
      INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
      $agency_revenue_where
@@ -1386,9 +1386,9 @@ $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
         SUM(ninos_5_12) as total_ninos_5_12,
         SUM(ninos_menores) as total_ninos_menores,
         SUM(total_personas) as total_personas_con_plaza,
-        SUM(precio_base - descuento_total) as ingresos_totales,  -- ✅ CORREGIDO
-        SUM(descuento_total) as descuentos_totales,
-        AVG(precio_base - descuento_total) as precio_promedio  -- ✅ CORREGIDO
+        SUM(precio_final) as ingresos_totales,
+ SUM(descuento_total) as descuentos_totales,
+ AVG(precio_final) as precio_promedio
      FROM $table_reservas 
      WHERE fecha BETWEEN %s AND %s 
      AND estado = 'confirmada'",
@@ -1453,16 +1453,15 @@ $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
             $today
         ));
 
-        // 2. INGRESOS DEL MES ACTUAL
 $ingresos_mes_actual = $wpdb->get_var($wpdb->prepare(
-    "SELECT SUM(precio_base - descuento_total) FROM $table_reservas   -- ✅ CORREGIDO
+    "SELECT SUM(precio_final) FROM $table_reservas
  WHERE fecha >= %s AND estado = 'confirmada'",
     $this_month_start
 )) ?: 0;
 
 // 3. INGRESOS DEL MES PASADO (para comparar)
 $ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
-    "SELECT SUM(precio_base - descuento_total) FROM $table_reservas   -- ✅ CORREGIDO
+    "SELECT SUM(precio_final) FROM $table_reservas
  WHERE fecha BETWEEN %s AND %s AND estado = 'confirmada'",
     $last_month_start,
     $last_month_end
@@ -1737,7 +1736,7 @@ $ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
                     "SELECT 
                         estado,
                         COUNT(*) as total,
-                        SUM(CASE WHEN r.estado = 'confirmada' THEN (r.precio_base - r.descuento_total) ELSE 0 END) as ingresos  -- ✅ CORREGIDO
+                        SUM(CASE WHEN r.estado = 'confirmada' THEN r.precio_final ELSE 0 END) as ingresos
                     FROM $table_reservas r
                     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
                     $estado_where_clause

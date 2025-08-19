@@ -3680,13 +3680,14 @@ function renderReservationDetails(reserva) {
                     <p><strong>Total personas con plaza:</strong> ${reserva.total_personas}</p>
                 </div>
                 
-                <div class="detail-section">
-                    <h4>💰 Información de Precios</h4>
-                    <p><strong>Precio base:</strong> ${parseFloat(reserva.precio_base).toFixed(2)}€</p>
-                    <p><strong>Descuento total:</strong> ${parseFloat(reserva.descuento_total).toFixed(2)}€</p>
-                    <p><strong>Precio final:</strong> <span class="price-final">${parseFloat(reserva.precio_final).toFixed(2)}€</span></p>
-                    <p><strong>Método de pago:</strong> ${reserva.metodo_pago}</p>
-                </div>
+                
+<div class="detail-section">
+    <h4>💰 Información de Precios</h4>
+    <p><strong>Precio base:</strong> ${parseFloat(reserva.precio_base).toFixed(2)}€</p>
+    <p><strong>Descuento total:</strong> ${parseFloat(reserva.descuento_total).toFixed(2)}€</p>
+    <p><strong>Precio final:</strong> <span class="price-final">${parseFloat(reserva.precio_final).toFixed(2)}€</span></p>
+    <p><strong>Método de pago:</strong> ${reserva.metodo_pago}</p>
+</div>
             </div>
             
             ${descuentoInfo}
@@ -10853,12 +10854,12 @@ function renderAgencyReservationDetails(reserva) {
                 </div>
                 
                 <div class="detail-section">
-                    <h4>💰 Información de Precios</h4>
-                    <p><strong>Precio base:</strong> ${parseFloat(reserva.precio_base).toFixed(2)}€</p>
-                    <p><strong>Descuento total:</strong> ${parseFloat(reserva.descuento_total).toFixed(2)}€</p>
-                    <p><strong>Precio final:</strong> <span class="price-final">${parseFloat(reserva.precio_final).toFixed(2)}€</span></p>
-                    <p><strong>Método de pago:</strong> ${reserva.metodo_pago}</p>
-                </div>
+    <h4>💰 Información de Precios</h4>
+    <p><strong>Precio base:</strong> ${parseFloat(reserva.precio_base).toFixed(2)}€</p>
+    <p><strong>Descuento total:</strong> ${parseFloat(reserva.descuento_total).toFixed(2)}€</p>
+    <p><strong>Precio final:</strong> <span class="price-final">${parseFloat(reserva.precio_final).toFixed(2)}€</span></p>
+    <p><strong>Método de pago:</strong> ${reserva.metodo_pago}</p>
+</div>
             </div>
             
             ${descuentoInfo}
