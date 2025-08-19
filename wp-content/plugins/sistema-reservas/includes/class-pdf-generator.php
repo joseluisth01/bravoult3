@@ -115,6 +115,10 @@ class ReservasPDFGenerator
             throw new Exception('TCPDF no está disponible. No se puede generar el PDF.');
         }
 
+        // Al inicio del método generate_ticket_pdf, después de recibir $reserva_data
+$hide_prices = isset($reserva_data['hide_prices']) && $reserva_data['hide_prices'] === true;
+$is_agency_pdf = isset($reserva_data['is_agency_pdf']) && $reserva_data['is_agency_pdf'] === true;
+
         try {
             // ✅ CREAR DIRECTORIO TEMPORAL SEGURO
             $temp_dir = $this->create_secure_temp_dir();

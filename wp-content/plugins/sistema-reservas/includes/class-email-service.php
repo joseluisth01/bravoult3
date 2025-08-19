@@ -1399,11 +1399,11 @@ public static function send_reminder_email($reserva_data)
      * Template para notificar a la agencia sobre su propia reserva
      */
     private static function build_agency_self_notification_template($reserva, $agency_user)
-    {
-        $fecha_formateada = date('d/m/Y', strtotime($reserva['fecha']));
-        $fecha_creacion = date('d/m/Y H:i', strtotime($reserva['created_at'] ?? 'now'));
+{
+    $fecha_formateada = date('d/m/Y', strtotime($reserva['fecha']));
+    $fecha_creacion = date('d/m/Y H:i', strtotime($reserva['created_at'] ?? 'now'));
 
-        return "
+    return "
     <!DOCTYPE html>
     <html>
     <head>
@@ -1443,12 +1443,8 @@ public static function send_reminder_email($reserva_data)
                     <td style='padding: 15px 25px; border-bottom: 1px solid #E0E0E0; text-align: right; font-weight: 700; color: #0073aa;'>" . $fecha_formateada . " - " . substr($reserva['hora'], 0, 5) . "</td>
                 </tr>
                 <tr>
-                    <td style='padding: 15px 25px; border-bottom: 1px solid #E0E0E0; font-weight: 600; color: #2D2D2D;'>Total personas:</td>
-                    <td style='padding: 15px 25px; border-bottom: 1px solid #E0E0E0; text-align: right; font-weight: 700; color: #0073aa;'>" . $reserva['total_personas'] . "</td>
-                </tr>
-                <tr style='background: #0073aa;'>
-                    <td style='padding: 20px 25px; font-size: 20px; font-weight: 700; color: #FFFFFF;'>TOTAL:</td>
-                    <td style='padding: 20px 25px; text-align: right; font-size: 24px; font-weight: 700; color: #FFFFFF;'>" . number_format($reserva['precio_final'], 2) . "€</td>
+                    <td style='padding: 15px 25px; font-weight: 600; color: #2D2D2D;'>Total personas:</td>
+                    <td style='padding: 15px 25px; text-align: right; font-weight: 700; color: #0073aa;'>" . $reserva['total_personas'] . "</td>
                 </tr>
             </table>
 
@@ -1471,5 +1467,5 @@ public static function send_reminder_email($reserva_data)
         </div>
     </body>
     </html>";
-    }
+}
 }

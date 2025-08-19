@@ -2518,128 +2518,125 @@ $ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
      * Generar PDF de ticket para agencias - FUNCIÓN CORREGIDA
      */
     public function generate_agency_ticket_pdf()
-    {
-        error_log('=== GENERATE_AGENCY_TICKET_PDF INICIADO ===');
+{
+    error_log('=== GENERATE_AGENCY_TICKET_PDF INICIADO ===');
 
-        if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-            error_log('❌ Error de nonce en generate_agency_ticket_pdf');
-            wp_send_json_error('Error de seguridad');
-            return;
-        }
-
-        if (!session_id()) {
-            session_start();
-        }
-
-        if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'agencia') {
-            error_log('❌ Sin permisos en generate_agency_ticket_pdf');
-            wp_send_json_error('Sin permisos');
-            return;
-        }
-
-        $reserva_id = intval($_POST['reserva_id']);
-        $agency_id = $_SESSION['reservas_user']['id'];
-
-        if (!$reserva_id) {
-            error_log('❌ ID de reserva no válido: ' . $reserva_id);
-            wp_send_json_error('ID de reserva no válido');
-            return;
-        }
-
-        error_log('🔍 Procesando reserva ID: ' . $reserva_id . ' para agencia ID: ' . $agency_id);
-
-        try {
-            global $wpdb;
-            $table_reservas = $wpdb->prefix . 'reservas_reservas';
-            $table_servicios = $wpdb->prefix . 'reservas_servicios';
-
-            // Verificar que la reserva pertenece a la agencia
-            $reserva = $wpdb->get_row($wpdb->prepare(
-                "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente, s.hora_vuelta 
-             FROM $table_reservas r
-             LEFT JOIN $table_servicios s ON r.servicio_id = s.id
-             WHERE r.id = %d AND r.agency_id = %d",
-                $reserva_id,
-                $agency_id
-            ));
-
-            if (!$reserva) {
-                error_log('❌ Reserva no encontrada o sin permisos: reserva_id=' . $reserva_id . ', agency_id=' . $agency_id);
-                wp_send_json_error('Reserva no encontrada o sin permisos');
-                return;
-            }
-
-            error_log('✅ Reserva encontrada para agencia: ' . print_r($reserva, true));
-
-            // Preparar datos para el PDF
-            $reserva_data = array(
-                'localizador' => $reserva->localizador,
-                'fecha' => $reserva->fecha,
-                'hora' => $reserva->hora,
-                'hora_vuelta' => $reserva->hora_vuelta ?? '',
-                'nombre' => $reserva->nombre,
-                'apellidos' => $reserva->apellidos,
-                'email' => $reserva->email,
-                'telefono' => $reserva->telefono,
-                'adultos' => $reserva->adultos,
-                'residentes' => $reserva->residentes,
-                'ninos_5_12' => $reserva->ninos_5_12,
-                'ninos_menores' => $reserva->ninos_menores,
-                'total_personas' => $reserva->total_personas,
-                'precio_base' => $reserva->precio_base,
-                'descuento_total' => $reserva->descuento_total,
-                'precio_final' => $reserva->precio_final,
-                'precio_adulto' => $reserva->precio_adulto ?? 10.00,
-                'precio_nino' => $reserva->precio_nino ?? 5.00,
-                'precio_residente' => $reserva->precio_residente ?? 5.00,
-                'created_at' => $reserva->created_at,
-                'metodo_pago' => $reserva->metodo_pago ?? 'agencia'
-            );
-
-            error_log('📋 Datos preparados para PDF de agencia: ' . print_r($reserva_data, true));
-
-            // Generar PDF
-            if (!class_exists('ReservasPDFGenerator')) {
-                require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
-            }
-
-            $pdf_generator = new ReservasPDFGenerator();
-            $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
-
-            if (!$pdf_path || !file_exists($pdf_path)) {
-                error_log('❌ PDF no se generó correctamente para agencia');
-                wp_send_json_error('Error generando el PDF');
-                return;
-            }
-
-            error_log('✅ PDF generado para agencia: ' . $pdf_path);
-            error_log('📁 Tamaño del archivo: ' . filesize($pdf_path) . ' bytes');
-
-            // ✅ CREAR URL PÚBLICO CORRECTO - IGUAL QUE EN LAS OTRAS FUNCIONES
-            $upload_dir = wp_upload_dir();
-            $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
-            $pdf_url = $upload_dir['baseurl'] . $relative_path;
-
-            error_log('🌐 URL del PDF para agencia: ' . $pdf_url);
-
-            // Programar eliminación del archivo después de 1 hora
-            wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
-
-            wp_send_json_success(array(
-                'pdf_url' => $pdf_url,
-                'pdf_path' => $pdf_path,
-                'localizador' => $reserva->localizador,
-                'filename' => 'billete_' . $reserva->localizador . '.pdf',
-                'file_exists' => file_exists($pdf_path),
-                'file_size' => filesize($pdf_path),
-                'agency_id' => $agency_id
-            ));
-        } catch (Exception $e) {
-            error_log('❌ Exception en generate_agency_ticket_pdf: ' . $e->getMessage());
-            error_log('❌ Stack trace: ' . $e->getTraceAsString());
-            wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
-        }
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        error_log('❌ Error de nonce en generate_agency_ticket_pdf');
+        wp_send_json_error('Error de seguridad');
+        return;
     }
+
+    if (!session_id()) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'agencia') {
+        error_log('❌ Sin permisos en generate_agency_ticket_pdf');
+        wp_send_json_error('Sin permisos');
+        return;
+    }
+
+    $reserva_id = intval($_POST['reserva_id']);
+    $agency_id = $_SESSION['reservas_user']['id'];
+
+    if (!$reserva_id) {
+        error_log('❌ ID de reserva no válido: ' . $reserva_id);
+        wp_send_json_error('ID de reserva no válido');
+        return;
+    }
+
+    error_log('🔍 Procesando reserva ID: ' . $reserva_id . ' para agencia ID: ' . $agency_id);
+
+    try {
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+
+        // Verificar que la reserva pertenece a la agencia
+        $reserva = $wpdb->get_row($wpdb->prepare(
+            "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente, s.hora_vuelta 
+         FROM $table_reservas r
+         LEFT JOIN $table_servicios s ON r.servicio_id = s.id
+         WHERE r.id = %d AND r.agency_id = %d",
+            $reserva_id,
+            $agency_id
+        ));
+
+        if (!$reserva) {
+            error_log('❌ Reserva no encontrada o sin permisos: reserva_id=' . $reserva_id . ', agency_id=' . $agency_id);
+            wp_send_json_error('Reserva no encontrada o sin permisos');
+            return;
+        }
+
+        error_log('✅ Reserva encontrada para agencia: ' . print_r($reserva, true));
+
+        // ✅ PREPARAR DATOS PARA EL PDF SIN PRECIOS PARA AGENCIAS
+        $reserva_data = array(
+            'localizador' => $reserva->localizador,
+            'fecha' => $reserva->fecha,
+            'hora' => $reserva->hora,
+            'hora_vuelta' => $reserva->hora_vuelta ?? '',
+            'nombre' => $reserva->nombre,
+            'apellidos' => $reserva->apellidos,
+            'email' => $reserva->email,
+            'telefono' => $reserva->telefono,
+            'adultos' => $reserva->adultos,
+            'residentes' => $reserva->residentes,
+            'ninos_5_12' => $reserva->ninos_5_12,
+            'ninos_menores' => $reserva->ninos_menores,
+            'total_personas' => $reserva->total_personas,
+            'created_at' => $reserva->created_at,
+            'metodo_pago' => 'agencia',
+            // ✅ AÑADIR FLAG PARA OCULTAR PRECIOS
+            'hide_prices' => true,
+            'is_agency_pdf' => true
+        );
+
+        error_log('📋 Datos preparados para PDF de agencia (sin precios): ' . print_r($reserva_data, true));
+
+        // Generar PDF
+        if (!class_exists('ReservasPDFGenerator')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
+        }
+
+        $pdf_generator = new ReservasPDFGenerator();
+        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
+
+        if (!$pdf_path || !file_exists($pdf_path)) {
+            error_log('❌ PDF no se generó correctamente para agencia');
+            wp_send_json_error('Error generando el PDF');
+            return;
+        }
+
+        error_log('✅ PDF generado para agencia: ' . $pdf_path);
+        error_log('📁 Tamaño del archivo: ' . filesize($pdf_path) . ' bytes');
+
+        // ✅ CREAR URL PÚBLICO CORRECTO - IGUAL QUE EN LAS OTRAS FUNCIONES
+        $upload_dir = wp_upload_dir();
+        $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
+        $pdf_url = $upload_dir['baseurl'] . $relative_path;
+
+        error_log('🌐 URL del PDF para agencia: ' . $pdf_url);
+
+        // Programar eliminación del archivo después de 1 hora
+        wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
+
+        wp_send_json_success(array(
+            'pdf_url' => $pdf_url,
+            'pdf_path' => $pdf_path,
+            'localizador' => $reserva->localizador,
+            'filename' => 'billete_' . $reserva->localizador . '.pdf',
+            'file_exists' => file_exists($pdf_path),
+            'file_size' => filesize($pdf_path),
+            'agency_id' => $agency_id
+        ));
+    } catch (Exception $e) {
+        error_log('❌ Exception en generate_agency_ticket_pdf: ' . $e->getMessage());
+        error_log('❌ Stack trace: ' . $e->getTraceAsString());
+        wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
+    }
+}
 
     /**
      * Solicitar cancelación de reserva por parte de agencia
