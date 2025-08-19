@@ -86,140 +86,140 @@ class ReservasReportsAdmin
      * Obtener informe de reservas por fechas - CON FILTROS MEJORADOS Y INGRESOS CORREGIDOS
      */
     public function get_reservations_report()
-{
-    // ✅ DEBUGGING MEJORADO
-    error_log('=== REPORTS AJAX REQUEST START ===');
-    header('Content-Type: application/json');
+    {
+        // ✅ DEBUGGING MEJORADO
+        error_log('=== REPORTS AJAX REQUEST START ===');
+        header('Content-Type: application/json');
 
-    try {
-        // ✅ VERIFICACIÓN SIMPLIFICADA TEMPORAL
-        if (!session_id()) {
-            session_start();
-        }
-
-        if (!isset($_SESSION['reservas_user'])) {
-            wp_send_json_error('Sesión expirada. Recarga la página e inicia sesión nuevamente.');
-            return;
-        }
-
-        $user = $_SESSION['reservas_user'];
-        if (!in_array($user['role'], ['super_admin', 'admin'])) {
-            wp_send_json_error('Sin permisos');
-            return;
-        }
-
-        global $wpdb;
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        $table_agencies = $wpdb->prefix . 'reservas_agencies';
-        $table_servicios = $wpdb->prefix . 'reservas_servicios';
-
-        // ✅ NUEVOS PARÁMETROS DE FILTRO INCLUYENDO AGENCIAS Y HORARIOS
-        $fecha_inicio = sanitize_text_field($_POST['fecha_inicio'] ?? date('Y-m-d'));
-        $fecha_fin = sanitize_text_field($_POST['fecha_fin'] ?? date('Y-m-d'));
-        $tipo_fecha = sanitize_text_field($_POST['tipo_fecha'] ?? 'servicio'); // 'servicio' o 'compra'
-        $estado_filtro = sanitize_text_field($_POST['estado_filtro'] ?? 'confirmadas'); // 'todas', 'confirmadas', 'canceladas'
-        $agency_filter = sanitize_text_field($_POST['agency_filter'] ?? 'todas'); // 'todas', 'sin_agencia', o ID de agencia
-        $selected_schedules = $_POST['selected_schedules'] ?? ''; // ✅ NUEVO FILTRO
-
-        $page = intval($_POST['page'] ?? 1);
-        $per_page = 20;
-        $offset = ($page - 1) * $per_page;
-
-        // ✅ CONSTRUIR CONDICIONES WHERE DINÁMICAMENTE PARA LISTADO
-        $where_conditions = array();
-        $query_params = array();
-
-        // Filtro por tipo de fecha
-        if ($tipo_fecha === 'compra') {
-            $where_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
-        } else {
-            $where_conditions[] = "r.fecha BETWEEN %s AND %s";
-        }
-        $query_params[] = $fecha_inicio;
-        $query_params[] = $fecha_fin;
-
-        // ✅ FILTRO DE ESTADO PARA LISTADO
-        switch ($estado_filtro) {
-            case 'confirmadas':
-                $where_conditions[] = "r.estado = 'confirmada'";
-                break;
-            case 'canceladas':
-                $where_conditions[] = "r.estado = 'cancelada'";
-                break;
-            case 'todas':
-                // No añadir condición, mostrar todas
-                break;
-        }
-
-        // ✅ FILTRO POR AGENCIAS PARA LISTADO
-        switch ($agency_filter) {
-            case 'sin_agencia':
-                $where_conditions[] = "r.agency_id IS NULL";
-                break;
-            case 'todas':
-                // No añadir condición, mostrar todas
-                break;
-            default:
-                if (is_numeric($agency_filter) && $agency_filter > 0) {
-                    $where_conditions[] = "r.agency_id = %d";
-                    $query_params[] = intval($agency_filter);
-                }
-                break;
-        }
-
-        // ✅ FILTRO POR HORARIOS SELECCIONADOS
-        if (!empty($selected_schedules)) {
-            error_log('=== APLICANDO FILTRO DE HORARIOS EN LISTADO ===');
-            error_log('Selected schedules raw: ' . $selected_schedules);
-
-            $selected_schedules_json = $selected_schedules;
-            if (strpos($selected_schedules_json, '\\') !== false) {
-                $selected_schedules_json = stripslashes($selected_schedules_json);
+        try {
+            // ✅ VERIFICACIÓN SIMPLIFICADA TEMPORAL
+            if (!session_id()) {
+                session_start();
             }
 
-            $selected_schedules_array = json_decode($selected_schedules_json, true);
+            if (!isset($_SESSION['reservas_user'])) {
+                wp_send_json_error('Sesión expirada. Recarga la página e inicia sesión nuevamente.');
+                return;
+            }
 
-            if (is_array($selected_schedules_array) && !empty($selected_schedules_array)) {
-                $schedule_conditions = array();
+            $user = $_SESSION['reservas_user'];
+            if (!in_array($user['role'], ['super_admin', 'admin'])) {
+                wp_send_json_error('Sin permisos');
+                return;
+            }
 
-                foreach ($selected_schedules_array as $schedule) {
-                    if (!empty($schedule['hora'])) {
-                        $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
+            global $wpdb;
+            $table_reservas = $wpdb->prefix . 'reservas_reservas';
+            $table_agencies = $wpdb->prefix . 'reservas_agencies';
+            $table_servicios = $wpdb->prefix . 'reservas_servicios';
 
-                        if (
-                            !empty($schedule['hora_vuelta']) &&
-                            $schedule['hora_vuelta'] !== 'null' &&
-                            $schedule['hora_vuelta'] !== '' &&
-                            $schedule['hora_vuelta'] !== '00:00:00'
-                        ) {
-                            // Horario con vuelta específica
-                            $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
-                            $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
-                            $query_params[] = $hora_normalizada;
-                            $query_params[] = $vuelta_normalizada;
-                        } else {
-                            // Solo horario de ida
-                            $schedule_conditions[] = "(s.hora = %s)";
-                            $query_params[] = $hora_normalizada;
+            // ✅ NUEVOS PARÁMETROS DE FILTRO INCLUYENDO AGENCIAS Y HORARIOS
+            $fecha_inicio = sanitize_text_field($_POST['fecha_inicio'] ?? date('Y-m-d'));
+            $fecha_fin = sanitize_text_field($_POST['fecha_fin'] ?? date('Y-m-d'));
+            $tipo_fecha = sanitize_text_field($_POST['tipo_fecha'] ?? 'servicio'); // 'servicio' o 'compra'
+            $estado_filtro = sanitize_text_field($_POST['estado_filtro'] ?? 'confirmadas'); // 'todas', 'confirmadas', 'canceladas'
+            $agency_filter = sanitize_text_field($_POST['agency_filter'] ?? 'todas'); // 'todas', 'sin_agencia', o ID de agencia
+            $selected_schedules = $_POST['selected_schedules'] ?? ''; // ✅ NUEVO FILTRO
+
+            $page = intval($_POST['page'] ?? 1);
+            $per_page = 20;
+            $offset = ($page - 1) * $per_page;
+
+            // ✅ CONSTRUIR CONDICIONES WHERE DINÁMICAMENTE PARA LISTADO
+            $where_conditions = array();
+            $query_params = array();
+
+            // Filtro por tipo de fecha
+            if ($tipo_fecha === 'compra') {
+                $where_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
+            } else {
+                $where_conditions[] = "r.fecha BETWEEN %s AND %s";
+            }
+            $query_params[] = $fecha_inicio;
+            $query_params[] = $fecha_fin;
+
+            // ✅ FILTRO DE ESTADO PARA LISTADO
+            switch ($estado_filtro) {
+                case 'confirmadas':
+                    $where_conditions[] = "r.estado = 'confirmada'";
+                    break;
+                case 'canceladas':
+                    $where_conditions[] = "r.estado = 'cancelada'";
+                    break;
+                case 'todas':
+                    // No añadir condición, mostrar todas
+                    break;
+            }
+
+            // ✅ FILTRO POR AGENCIAS PARA LISTADO
+            switch ($agency_filter) {
+                case 'sin_agencia':
+                    $where_conditions[] = "r.agency_id IS NULL";
+                    break;
+                case 'todas':
+                    // No añadir condición, mostrar todas
+                    break;
+                default:
+                    if (is_numeric($agency_filter) && $agency_filter > 0) {
+                        $where_conditions[] = "r.agency_id = %d";
+                        $query_params[] = intval($agency_filter);
+                    }
+                    break;
+            }
+
+            // ✅ FILTRO POR HORARIOS SELECCIONADOS
+            if (!empty($selected_schedules)) {
+                error_log('=== APLICANDO FILTRO DE HORARIOS EN LISTADO ===');
+                error_log('Selected schedules raw: ' . $selected_schedules);
+
+                $selected_schedules_json = $selected_schedules;
+                if (strpos($selected_schedules_json, '\\') !== false) {
+                    $selected_schedules_json = stripslashes($selected_schedules_json);
+                }
+
+                $selected_schedules_array = json_decode($selected_schedules_json, true);
+
+                if (is_array($selected_schedules_array) && !empty($selected_schedules_array)) {
+                    $schedule_conditions = array();
+
+                    foreach ($selected_schedules_array as $schedule) {
+                        if (!empty($schedule['hora'])) {
+                            $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
+
+                            if (
+                                !empty($schedule['hora_vuelta']) &&
+                                $schedule['hora_vuelta'] !== 'null' &&
+                                $schedule['hora_vuelta'] !== '' &&
+                                $schedule['hora_vuelta'] !== '00:00:00'
+                            ) {
+                                // Horario con vuelta específica
+                                $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
+                                $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
+                                $query_params[] = $hora_normalizada;
+                                $query_params[] = $vuelta_normalizada;
+                            } else {
+                                // Solo horario de ida
+                                $schedule_conditions[] = "(s.hora = %s)";
+                                $query_params[] = $hora_normalizada;
+                            }
                         }
                     }
-                }
 
-                if (!empty($schedule_conditions)) {
-                    $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
-                    $where_conditions[] = $horarios_where;
+                    if (!empty($schedule_conditions)) {
+                        $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
+                        $where_conditions[] = $horarios_where;
+                    }
                 }
             }
-        }
 
-        // Construir cláusula WHERE para listado
-        $where_clause = '';
-        if (!empty($where_conditions)) {
-            $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
-        }
+            // Construir cláusula WHERE para listado
+            $where_clause = '';
+            if (!empty($where_conditions)) {
+                $where_clause = 'WHERE ' . implode(' AND ', $where_conditions);
+            }
 
-        // ✅ QUERY PRINCIPAL PARA LISTADO DE RESERVAS - INCLUIR SERVICIOS
-        $query = "SELECT r.*, s.hora as servicio_hora, s.hora_vuelta as servicio_hora_vuelta, a.agency_name, a.email as agency_email
+            // ✅ QUERY PRINCIPAL PARA LISTADO DE RESERVAS - INCLUIR SERVICIOS
+            $query = "SELECT r.*, s.hora as servicio_hora, s.hora_vuelta as servicio_hora_vuelta, a.agency_name, a.email as agency_email
                  FROM $table_reservas r
                  INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
                  LEFT JOIN $table_agencies a ON r.agency_id = a.id
@@ -227,191 +227,56 @@ class ReservasReportsAdmin
                  ORDER BY r.fecha DESC, s.hora DESC
                  LIMIT %d OFFSET %d";
 
-        $query_params[] = $per_page;
-        $query_params[] = $offset;
+            $query_params[] = $per_page;
+            $query_params[] = $offset;
 
-        $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
+            $reservas = $wpdb->get_results($wpdb->prepare($query, ...$query_params));
 
-        if ($wpdb->last_error) {
-            error_log('❌ Database error in reports: ' . $wpdb->last_error);
-            die(json_encode(['success' => false, 'data' => 'Database error: ' . $wpdb->last_error]));
-        }
+            if ($wpdb->last_error) {
+                error_log('❌ Database error in reports: ' . $wpdb->last_error);
+                die(json_encode(['success' => false, 'data' => 'Database error: ' . $wpdb->last_error]));
+            }
 
-        // Contar total de reservas con los mismos filtros
-        $count_query = "SELECT COUNT(*) FROM $table_reservas r 
+            // Contar total de reservas con los mismos filtros
+            $count_query = "SELECT COUNT(*) FROM $table_reservas r 
                        INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
                        LEFT JOIN $table_agencies a ON r.agency_id = a.id
                        $where_clause";
-        $count_params = array_slice($query_params, 0, -2); // Quitar LIMIT y OFFSET
-        $total_reservas = $wpdb->get_var($wpdb->prepare($count_query, ...$count_params));
+            $count_params = array_slice($query_params, 0, -2); // Quitar LIMIT y OFFSET
+            $total_reservas = $wpdb->get_var($wpdb->prepare($count_query, ...$count_params));
 
-        // ✅ ESTADÍSTICAS: SEPARAR CONTEOS DE INGRESOS CON FILTROS DE HORARIOS
+            // ✅ ESTADÍSTICAS: SEPARAR CONTEOS DE INGRESOS CON FILTROS DE HORARIOS
 
-        // PREPARAR CONDICIONES BASE PARA ESTADÍSTICAS
-        $stats_base_conditions = array();
-        $stats_base_params = array();
+            // PREPARAR CONDICIONES BASE PARA ESTADÍSTICAS
+            $stats_base_conditions = array();
+            $stats_base_params = array();
 
-        // Aplicar filtros de fecha y agencia para estadísticas
-        if ($tipo_fecha === 'compra') {
-            $stats_base_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
-        } else {
-            $stats_base_conditions[] = "r.fecha BETWEEN %s AND %s";
-        }
-        $stats_base_params[] = $fecha_inicio;
-        $stats_base_params[] = $fecha_fin;
-
-        // Filtro de agencias para estadísticas
-        switch ($agency_filter) {
-            case 'sin_agencia':
-                $stats_base_conditions[] = "r.agency_id IS NULL";
-                break;
-            case 'todas':
-                // No añadir condición
-                break;
-            default:
-                if (is_numeric($agency_filter) && $agency_filter > 0) {
-                    $stats_base_conditions[] = "r.agency_id = %d";
-                    $stats_base_params[] = intval($agency_filter);
-                }
-                break;
-        }
-
-        // ✅ APLICAR FILTRO DE HORARIOS TAMBIÉN EN ESTADÍSTICAS
-        if (!empty($selected_schedules)) {
-            $selected_schedules_json = $selected_schedules;
-            if (strpos($selected_schedules_json, '\\') !== false) {
-                $selected_schedules_json = stripslashes($selected_schedules_json);
-            }
-
-            $selected_schedules_array = json_decode($selected_schedules_json, true);
-
-            if (is_array($selected_schedules_array) && !empty($selected_schedules_array)) {
-                $schedule_conditions = array();
-
-                foreach ($selected_schedules_array as $schedule) {
-                    if (!empty($schedule['hora'])) {
-                        $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
-
-                        if (
-                            !empty($schedule['hora_vuelta']) &&
-                            $schedule['hora_vuelta'] !== 'null' &&
-                            $schedule['hora_vuelta'] !== '' &&
-                            $schedule['hora_vuelta'] !== '00:00:00'
-                        ) {
-                            $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
-                            $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
-                            $stats_base_params[] = $hora_normalizada;
-                            $stats_base_params[] = $vuelta_normalizada;
-                        } else {
-                            $schedule_conditions[] = "(s.hora = %s)";
-                            $stats_base_params[] = $hora_normalizada;
-                        }
-                    }
-                }
-
-                if (!empty($schedule_conditions)) {
-                    $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
-                    $stats_base_conditions[] = $horarios_where;
-                }
-            }
-        }
-
-        // ✅ ESTADÍSTICAS DE CONTEO (RESPETAN EL FILTRO DE ESTADO)
-        $stats_count_conditions = $stats_base_conditions;
-        $stats_count_params = $stats_base_params;
-
-        switch ($estado_filtro) {
-            case 'confirmadas':
-                $stats_count_conditions[] = "r.estado = 'confirmada'";
-                break;
-            case 'canceladas':
-                $stats_count_conditions[] = "r.estado = 'cancelada'";
-                break;
-            case 'todas':
-                // No añadir condición, contar todas
-                break;
-        }
-
-        // ✅ ESTADÍSTICAS DE INGRESOS (SIEMPRE SOLO CONFIRMADAS)
-        $stats_revenue_conditions = $stats_base_conditions;
-        $stats_revenue_conditions[] = "r.estado = 'confirmada'"; // ✅ SIEMPRE CONFIRMADAS
-        $stats_revenue_params = $stats_base_params;
-
-        $stats_count_where = 'WHERE ' . implode(' AND ', $stats_count_conditions);
-        $stats_revenue_where = 'WHERE ' . implode(' AND ', $stats_revenue_conditions);
-
-        $stats_count = $wpdb->get_row($wpdb->prepare(
-    "SELECT 
-        COUNT(*) as total_reservas,
-        SUM(r.adultos) as total_adultos,
-        SUM(r.residentes) as total_residentes,
-        SUM(r.ninos_5_12) as total_ninos_5_12,
-        SUM(r.ninos_menores) as total_ninos_menores,
-        SUM(r.total_personas) as total_personas_con_plaza,
-        SUM(r.descuento_total) as descuentos_totales
-     FROM $table_reservas r
-     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-     $stats_count_where",
-    ...$stats_count_params
-));
-
-        $stats_revenue = $wpdb->get_row($wpdb->prepare(
-    "SELECT 
-        SUM(r.precio_final) as ingresos_totales  -- ✅ USAR PRECIO_FINAL
-     FROM $table_reservas r
-     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-     $stats_revenue_where",
-    ...$stats_revenue_params
-));
-
-        // Combinar estadísticas
-        $stats = (object) array(
-            'total_reservas' => $stats_count->total_reservas ?? 0,
-            'total_adultos' => $stats_count->total_adultos ?? 0,
-            'total_residentes' => $stats_count->total_residentes ?? 0,
-            'total_ninos_5_12' => $stats_count->total_ninos_5_12 ?? 0,
-            'total_ninos_menores' => $stats_count->total_ninos_menores ?? 0,
-            'total_personas_con_plaza' => $stats_count->total_personas_con_plaza ?? 0,
-            'descuentos_totales' => $stats_count->descuentos_totales ?? 0,
-            'ingresos_totales' => $stats_revenue->ingresos_totales ?? 0 // ✅ SOLO CONFIRMADAS
-        );
-
-        // ✅ ESTADÍSTICAS POR ESTADO (SOLO SI SE SELECCIONA "TODAS") - CON FILTRO DE HORARIOS
-        $stats_por_estado = null;
-        if ($estado_filtro === 'todas') {
-            $estado_conditions = $stats_base_conditions;
-            $estado_params = $stats_base_params;
-            $estado_where = 'WHERE ' . implode(' AND ', $estado_conditions);
-
-            $stats_por_estado = $wpdb->get_results($wpdb->prepare(
-                "SELECT 
-                estado,
-                COUNT(*) as total,
-                SUM(CASE WHEN r.estado = 'confirmada' THEN r.precio_final ELSE 0 END) as ingresos
-             FROM $table_reservas r
-             INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-             $estado_where
-             GROUP BY r.estado
-             ORDER BY total DESC",
-                ...$estado_params
-            ));
-        }
-
-        // ✅ ESTADÍSTICAS POR AGENCIAS (SI NO SE FILTRA POR UNA ESPECÍFICA) - CON FILTRO DE HORARIOS
-        $stats_por_agencias = null;
-        if ($agency_filter === 'todas') {
-            $agency_base_conditions = array();
-            $agency_base_params = array();
-
+            // Aplicar filtros de fecha y agencia para estadísticas
             if ($tipo_fecha === 'compra') {
-                $agency_base_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
+                $stats_base_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
             } else {
-                $agency_base_conditions[] = "r.fecha BETWEEN %s AND %s";
+                $stats_base_conditions[] = "r.fecha BETWEEN %s AND %s";
             }
-            $agency_base_params[] = $fecha_inicio;
-            $agency_base_params[] = $fecha_fin;
+            $stats_base_params[] = $fecha_inicio;
+            $stats_base_params[] = $fecha_fin;
 
-            // ✅ APLICAR FILTRO DE HORARIOS PARA AGENCIAS TAMBIÉN
+            // Filtro de agencias para estadísticas
+            switch ($agency_filter) {
+                case 'sin_agencia':
+                    $stats_base_conditions[] = "r.agency_id IS NULL";
+                    break;
+                case 'todas':
+                    // No añadir condición
+                    break;
+                default:
+                    if (is_numeric($agency_filter) && $agency_filter > 0) {
+                        $stats_base_conditions[] = "r.agency_id = %d";
+                        $stats_base_params[] = intval($agency_filter);
+                    }
+                    break;
+            }
+
+            // ✅ APLICAR FILTRO DE HORARIOS TAMBIÉN EN ESTADÍSTICAS
             if (!empty($selected_schedules)) {
                 $selected_schedules_json = $selected_schedules;
                 if (strpos($selected_schedules_json, '\\') !== false) {
@@ -435,49 +300,184 @@ class ReservasReportsAdmin
                             ) {
                                 $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
                                 $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
-                                $agency_base_params[] = $hora_normalizada;
-                                $agency_base_params[] = $vuelta_normalizada;
+                                $stats_base_params[] = $hora_normalizada;
+                                $stats_base_params[] = $vuelta_normalizada;
                             } else {
                                 $schedule_conditions[] = "(s.hora = %s)";
-                                $agency_base_params[] = $hora_normalizada;
+                                $stats_base_params[] = $hora_normalizada;
                             }
                         }
                     }
 
                     if (!empty($schedule_conditions)) {
                         $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
-                        $agency_base_conditions[] = $horarios_where;
+                        $stats_base_conditions[] = $horarios_where;
                     }
                 }
             }
 
-            // Conteos por agencia (respetan filtro de estado)
-            $agency_count_conditions = $agency_base_conditions;
-            $agency_count_params = $agency_base_params;
+            // ✅ ESTADÍSTICAS DE CONTEO (RESPETAN EL FILTRO DE ESTADO)
+            $stats_count_conditions = $stats_base_conditions;
+            $stats_count_params = $stats_base_params;
 
             switch ($estado_filtro) {
                 case 'confirmadas':
-                    $agency_count_conditions[] = "r.estado = 'confirmada'";
+                    $stats_count_conditions[] = "r.estado = 'confirmada'";
                     break;
                 case 'canceladas':
-                    $agency_count_conditions[] = "r.estado = 'cancelada'";
+                    $stats_count_conditions[] = "r.estado = 'cancelada'";
                     break;
                 case 'todas':
-                    // No añadir condición
+                    // No añadir condición, contar todas
                     break;
             }
 
-            // Ingresos por agencia (siempre solo confirmadas)
-            $agency_revenue_conditions = $agency_base_conditions;
-            $agency_revenue_conditions[] = "r.estado = 'confirmada'";
-            $agency_revenue_params = $agency_base_params;
+            // ✅ ESTADÍSTICAS DE INGRESOS (SIEMPRE SOLO CONFIRMADAS)
+            $stats_revenue_conditions = $stats_base_conditions;
+            $stats_revenue_conditions[] = "r.estado = 'confirmada'"; // ✅ SIEMPRE CONFIRMADAS
+            $stats_revenue_params = $stats_base_params;
 
-            $agency_count_where = 'WHERE ' . implode(' AND ', $agency_count_conditions);
-            $agency_revenue_where = 'WHERE ' . implode(' AND ', $agency_revenue_conditions);
+            $stats_count_where = 'WHERE ' . implode(' AND ', $stats_count_conditions);
+            $stats_revenue_where = 'WHERE ' . implode(' AND ', $stats_revenue_conditions);
 
-            // Obtener conteos por agencia - CON SERVICIOS
-            $agency_count_stats = $wpdb->get_results($wpdb->prepare(
+            $stats_count = $wpdb->get_row($wpdb->prepare(
                 "SELECT 
+        COUNT(*) as total_reservas,
+        SUM(r.adultos) as total_adultos,
+        SUM(r.residentes) as total_residentes,
+        SUM(r.ninos_5_12) as total_ninos_5_12,
+        SUM(r.ninos_menores) as total_ninos_menores,
+        SUM(r.total_personas) as total_personas_con_plaza,
+        SUM(r.descuento_total) as descuentos_totales
+     FROM $table_reservas r
+     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+     $stats_count_where",
+                ...$stats_count_params
+            ));
+
+            $stats_revenue = $wpdb->get_row($wpdb->prepare(
+                "SELECT 
+        SUM(r.precio_base - r.descuento_total) as ingresos_totales  -- ✅ CORREGIDO
+     FROM $table_reservas r
+     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+     $stats_revenue_where",
+                ...$stats_revenue_params
+            ));
+
+            // Combinar estadísticas
+            $stats = (object) array(
+                'total_reservas' => $stats_count->total_reservas ?? 0,
+                'total_adultos' => $stats_count->total_adultos ?? 0,
+                'total_residentes' => $stats_count->total_residentes ?? 0,
+                'total_ninos_5_12' => $stats_count->total_ninos_5_12 ?? 0,
+                'total_ninos_menores' => $stats_count->total_ninos_menores ?? 0,
+                'total_personas_con_plaza' => $stats_count->total_personas_con_plaza ?? 0,
+                'descuentos_totales' => $stats_count->descuentos_totales ?? 0,
+                'ingresos_totales' => $stats_revenue->ingresos_totales ?? 0 // ✅ SOLO CONFIRMADAS
+            );
+
+            // ✅ ESTADÍSTICAS POR ESTADO (SOLO SI SE SELECCIONA "TODAS") - CON FILTRO DE HORARIOS
+            $stats_por_estado = null;
+            if ($estado_filtro === 'todas') {
+                $estado_conditions = $stats_base_conditions;
+                $estado_params = $stats_base_params;
+                $estado_where = 'WHERE ' . implode(' AND ', $estado_conditions);
+
+                $stats_por_estado = $wpdb->get_results($wpdb->prepare(
+                    "SELECT 
+                estado,
+                COUNT(*) as total,
+                SUM(CASE WHEN r.estado = 'confirmada' THEN r.precio_final ELSE 0 END) as ingresos
+             FROM $table_reservas r
+             INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+             $estado_where
+             GROUP BY r.estado
+             ORDER BY total DESC",
+                    ...$estado_params
+                ));
+            }
+
+            // ✅ ESTADÍSTICAS POR AGENCIAS (SI NO SE FILTRA POR UNA ESPECÍFICA) - CON FILTRO DE HORARIOS
+            $stats_por_agencias = null;
+            if ($agency_filter === 'todas') {
+                $agency_base_conditions = array();
+                $agency_base_params = array();
+
+                if ($tipo_fecha === 'compra') {
+                    $agency_base_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
+                } else {
+                    $agency_base_conditions[] = "r.fecha BETWEEN %s AND %s";
+                }
+                $agency_base_params[] = $fecha_inicio;
+                $agency_base_params[] = $fecha_fin;
+
+                // ✅ APLICAR FILTRO DE HORARIOS PARA AGENCIAS TAMBIÉN
+                if (!empty($selected_schedules)) {
+                    $selected_schedules_json = $selected_schedules;
+                    if (strpos($selected_schedules_json, '\\') !== false) {
+                        $selected_schedules_json = stripslashes($selected_schedules_json);
+                    }
+
+                    $selected_schedules_array = json_decode($selected_schedules_json, true);
+
+                    if (is_array($selected_schedules_array) && !empty($selected_schedules_array)) {
+                        $schedule_conditions = array();
+
+                        foreach ($selected_schedules_array as $schedule) {
+                            if (!empty($schedule['hora'])) {
+                                $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
+
+                                if (
+                                    !empty($schedule['hora_vuelta']) &&
+                                    $schedule['hora_vuelta'] !== 'null' &&
+                                    $schedule['hora_vuelta'] !== '' &&
+                                    $schedule['hora_vuelta'] !== '00:00:00'
+                                ) {
+                                    $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
+                                    $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
+                                    $agency_base_params[] = $hora_normalizada;
+                                    $agency_base_params[] = $vuelta_normalizada;
+                                } else {
+                                    $schedule_conditions[] = "(s.hora = %s)";
+                                    $agency_base_params[] = $hora_normalizada;
+                                }
+                            }
+                        }
+
+                        if (!empty($schedule_conditions)) {
+                            $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
+                            $agency_base_conditions[] = $horarios_where;
+                        }
+                    }
+                }
+
+                // Conteos por agencia (respetan filtro de estado)
+                $agency_count_conditions = $agency_base_conditions;
+                $agency_count_params = $agency_base_params;
+
+                switch ($estado_filtro) {
+                    case 'confirmadas':
+                        $agency_count_conditions[] = "r.estado = 'confirmada'";
+                        break;
+                    case 'canceladas':
+                        $agency_count_conditions[] = "r.estado = 'cancelada'";
+                        break;
+                    case 'todas':
+                        // No añadir condición
+                        break;
+                }
+
+                // Ingresos por agencia (siempre solo confirmadas)
+                $agency_revenue_conditions = $agency_base_conditions;
+                $agency_revenue_conditions[] = "r.estado = 'confirmada'";
+                $agency_revenue_params = $agency_base_params;
+
+                $agency_count_where = 'WHERE ' . implode(' AND ', $agency_count_conditions);
+                $agency_revenue_where = 'WHERE ' . implode(' AND ', $agency_revenue_conditions);
+
+                // Obtener conteos por agencia - CON SERVICIOS
+                $agency_count_stats = $wpdb->get_results($wpdb->prepare(
+                    "SELECT 
                     r.agency_id,
                     COUNT(*) as total_reservas,
                     SUM(r.total_personas) as total_personas,
@@ -489,95 +489,95 @@ class ReservasReportsAdmin
                  INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
                  $agency_count_where
                  GROUP BY r.agency_id",
-                ...$agency_count_params
-            ));
+                    ...$agency_count_params
+                ));
 
-            // Obtener ingresos por agencia - CON SERVICIOS
-            $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
-                "SELECT 
-                    r.agency_id,
-                    SUM(r.precio_final) as ingresos_total
-                 FROM $table_reservas r
-                 INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-                 $agency_revenue_where
-                 GROUP BY r.agency_id",
-                ...$agency_revenue_params
-            ));
+                // Obtener ingresos por agencia - CON SERVICIOS
+$agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
+    "SELECT 
+        r.agency_id,
+        SUM(r.precio_base - r.descuento_total) as ingresos_total  -- ✅ CORREGIDO
+     FROM $table_reservas r
+     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+     $agency_revenue_where
+     GROUP BY r.agency_id",
+    ...$agency_revenue_params
+));
 
-            // Combinar resultados
-            $stats_por_agencias = array();
-            $revenue_by_agency = array();
+                // Combinar resultados
+                $stats_por_agencias = array();
+                $revenue_by_agency = array();
 
-            // Indexar ingresos por agency_id
-            foreach ($agency_revenue_stats as $revenue) {
-                $revenue_by_agency[$revenue->agency_id ?? 'null'] = $revenue->ingresos_total;
-            }
-
-            // Crear estadísticas combinadas
-            foreach ($agency_count_stats as $count) {
-                $agency_id = $count->agency_id;
-                $agency_key = $agency_id ?? 'null';
-
-                // Obtener nombre de agencia
-                if ($agency_id) {
-                    $agency_name = $wpdb->get_var($wpdb->prepare(
-                        "SELECT agency_name FROM $table_agencies WHERE id = %d",
-                        $agency_id
-                    ));
-                } else {
-                    $agency_name = 'Sin Agencia';
+                // Indexar ingresos por agency_id
+                foreach ($agency_revenue_stats as $revenue) {
+                    $revenue_by_agency[$revenue->agency_id ?? 'null'] = $revenue->ingresos_total;
                 }
 
-                $stats_por_agencias[] = (object) array(
-                    'agency_name' => $agency_name,
-                    'agency_id' => $agency_id,
-                    'total_reservas' => (int) $count->total_reservas,
-                    'total_personas' => (int) $count->total_personas,
-                    'ingresos_total' => (float) ($revenue_by_agency[$agency_key] ?? 0),
-                    'total_adultos' => isset($count->total_adultos) ? (int) $count->total_adultos : 0,
-                    'total_residentes' => isset($count->total_residentes) ? (int) $count->total_residentes : 0,
-                    'total_ninos_5_12' => isset($count->total_ninos_5_12) ? (int) $count->total_ninos_5_12 : 0,
-                    'total_ninos_menores' => isset($count->total_ninos_menores) ? (int) $count->total_ninos_menores : 0
-                );
+                // Crear estadísticas combinadas
+                foreach ($agency_count_stats as $count) {
+                    $agency_id = $count->agency_id;
+                    $agency_key = $agency_id ?? 'null';
+
+                    // Obtener nombre de agencia
+                    if ($agency_id) {
+                        $agency_name = $wpdb->get_var($wpdb->prepare(
+                            "SELECT agency_name FROM $table_agencies WHERE id = %d",
+                            $agency_id
+                        ));
+                    } else {
+                        $agency_name = 'Sin Agencia';
+                    }
+
+                    $stats_por_agencias[] = (object) array(
+                        'agency_name' => $agency_name,
+                        'agency_id' => $agency_id,
+                        'total_reservas' => (int) $count->total_reservas,
+                        'total_personas' => (int) $count->total_personas,
+                        'ingresos_total' => (float) ($revenue_by_agency[$agency_key] ?? 0),
+                        'total_adultos' => isset($count->total_adultos) ? (int) $count->total_adultos : 0,
+                        'total_residentes' => isset($count->total_residentes) ? (int) $count->total_residentes : 0,
+                        'total_ninos_5_12' => isset($count->total_ninos_5_12) ? (int) $count->total_ninos_5_12 : 0,
+                        'total_ninos_menores' => isset($count->total_ninos_menores) ? (int) $count->total_ninos_menores : 0
+                    );
+                }
+
+                // Ordenar por total de reservas
+                usort($stats_por_agencias, function ($a, $b) {
+                    return $b->total_reservas - $a->total_reservas;
+                });
+
+                // Limitar a 10 resultados
+                $stats_por_agencias = array_slice($stats_por_agencias, 0, 10);
             }
 
-            // Ordenar por total de reservas
-            usort($stats_por_agencias, function ($a, $b) {
-                return $b->total_reservas - $a->total_reservas;
-            });
+            $response_data = array(
+                'reservas' => $reservas,
+                'stats' => $stats,
+                'stats_por_estado' => $stats_por_estado,
+                'stats_por_agencias' => $stats_por_agencias,
+                'pagination' => array(
+                    'current_page' => $page,
+                    'total_pages' => ceil($total_reservas / $per_page),
+                    'total_items' => $total_reservas,
+                    'per_page' => $per_page
+                ),
+                'filtros' => array(
+                    'fecha_inicio' => $fecha_inicio,
+                    'fecha_fin' => $fecha_fin,
+                    'tipo_fecha' => $tipo_fecha,
+                    'estado_filtro' => $estado_filtro,
+                    'agency_filter' => $agency_filter,
+                    'selected_schedules' => $selected_schedules // ✅ INCLUIR EN RESPUESTA
+                )
+            );
 
-            // Limitar a 10 resultados
-            $stats_por_agencias = array_slice($stats_por_agencias, 0, 10);
+            error_log('✅ Reports data loaded successfully with all filters including schedules');
+            die(json_encode(['success' => true, 'data' => $response_data]));
+        } catch (Exception $e) {
+            error_log('❌ REPORTS EXCEPTION: ' . $e->getMessage());
+            die(json_encode(['success' => false, 'data' => 'Server error: ' . $e->getMessage()]));
         }
-
-        $response_data = array(
-            'reservas' => $reservas,
-            'stats' => $stats,
-            'stats_por_estado' => $stats_por_estado,
-            'stats_por_agencias' => $stats_por_agencias,
-            'pagination' => array(
-                'current_page' => $page,
-                'total_pages' => ceil($total_reservas / $per_page),
-                'total_items' => $total_reservas,
-                'per_page' => $per_page
-            ),
-            'filtros' => array(
-                'fecha_inicio' => $fecha_inicio,
-                'fecha_fin' => $fecha_fin,
-                'tipo_fecha' => $tipo_fecha,
-                'estado_filtro' => $estado_filtro,
-                'agency_filter' => $agency_filter,
-                'selected_schedules' => $selected_schedules // ✅ INCLUIR EN RESPUESTA
-            )
-        );
-
-        error_log('✅ Reports data loaded successfully with all filters including schedules');
-        die(json_encode(['success' => true, 'data' => $response_data]));
-    } catch (Exception $e) {
-        error_log('❌ REPORTS EXCEPTION: ' . $e->getMessage());
-        die(json_encode(['success' => false, 'data' => 'Server error: ' . $e->getMessage()]));
     }
-}
 
 
     /**
@@ -914,129 +914,128 @@ class ReservasReportsAdmin
 
 
     /**
- * Generar PDF de ticket para descarga desde reports - FUNCIÓN CORREGIDA
- */
-public function generate_ticket_pdf_from_reports()
-{
-    error_log('=== GENERATE_TICKET_PDF_FROM_REPORTS INICIADO ===');
-    
-    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-        error_log('❌ Error de nonce en generate_ticket_pdf_from_reports');
-        wp_send_json_error('Error de seguridad');
-        return;
-    }
+     * Generar PDF de ticket para descarga desde reports - FUNCIÓN CORREGIDA
+     */
+    public function generate_ticket_pdf_from_reports()
+    {
+        error_log('=== GENERATE_TICKET_PDF_FROM_REPORTS INICIADO ===');
 
-    if (!session_id()) {
-        session_start();
-    }
+        if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+            error_log('❌ Error de nonce en generate_ticket_pdf_from_reports');
+            wp_send_json_error('Error de seguridad');
+            return;
+        }
 
-    if (!isset($_SESSION['reservas_user']) || !in_array($_SESSION['reservas_user']['role'], ['super_admin', 'admin'])) {
-        error_log('❌ Sin permisos en generate_ticket_pdf_from_reports');
-        wp_send_json_error('Sin permisos');
-        return;
-    }
+        if (!session_id()) {
+            session_start();
+        }
 
-    $reserva_id = intval($_POST['reserva_id']);
+        if (!isset($_SESSION['reservas_user']) || !in_array($_SESSION['reservas_user']['role'], ['super_admin', 'admin'])) {
+            error_log('❌ Sin permisos en generate_ticket_pdf_from_reports');
+            wp_send_json_error('Sin permisos');
+            return;
+        }
 
-    if (!$reserva_id) {
-        error_log('❌ ID de reserva no válido: ' . $reserva_id);
-        wp_send_json_error('ID de reserva no válido');
-        return;
-    }
+        $reserva_id = intval($_POST['reserva_id']);
 
-    error_log('🔍 Procesando reserva ID: ' . $reserva_id);
+        if (!$reserva_id) {
+            error_log('❌ ID de reserva no válido: ' . $reserva_id);
+            wp_send_json_error('ID de reserva no válido');
+            return;
+        }
 
-    try {
-        global $wpdb;
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+        error_log('🔍 Procesando reserva ID: ' . $reserva_id);
 
-        // Obtener datos completos de la reserva
-        $reserva = $wpdb->get_row($wpdb->prepare(
-            "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente, s.hora_vuelta 
+        try {
+            global $wpdb;
+            $table_reservas = $wpdb->prefix . 'reservas_reservas';
+            $table_servicios = $wpdb->prefix . 'reservas_servicios';
+
+            // Obtener datos completos de la reserva
+            $reserva = $wpdb->get_row($wpdb->prepare(
+                "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente, s.hora_vuelta 
              FROM $table_reservas r
              LEFT JOIN $table_servicios s ON r.servicio_id = s.id
              WHERE r.id = %d",
-            $reserva_id
-        ));
+                $reserva_id
+            ));
 
-        if (!$reserva) {
-            error_log('❌ Reserva no encontrada: ' . $reserva_id);
-            wp_send_json_error('Reserva no encontrada');
-            return;
+            if (!$reserva) {
+                error_log('❌ Reserva no encontrada: ' . $reserva_id);
+                wp_send_json_error('Reserva no encontrada');
+                return;
+            }
+
+            error_log('✅ Reserva encontrada: ' . print_r($reserva, true));
+
+            // Preparar datos para el PDF
+            $reserva_data = array(
+                'localizador' => $reserva->localizador,
+                'fecha' => $reserva->fecha,
+                'hora' => $reserva->hora,
+                'hora_vuelta' => $reserva->hora_vuelta ?? '',
+                'nombre' => $reserva->nombre,
+                'apellidos' => $reserva->apellidos,
+                'email' => $reserva->email,
+                'telefono' => $reserva->telefono,
+                'adultos' => $reserva->adultos,
+                'residentes' => $reserva->residentes,
+                'ninos_5_12' => $reserva->ninos_5_12,
+                'ninos_menores' => $reserva->ninos_menores,
+                'total_personas' => $reserva->total_personas,
+                'precio_base' => $reserva->precio_base,
+                'descuento_total' => $reserva->descuento_total,
+                'precio_final' => $reserva->precio_final,
+                'precio_adulto' => $reserva->precio_adulto ?? 10.00,
+                'precio_nino' => $reserva->precio_nino ?? 5.00,
+                'precio_residente' => $reserva->precio_residente ?? 5.00,
+                'created_at' => $reserva->created_at,
+                'metodo_pago' => $reserva->metodo_pago ?? 'directo'
+            );
+
+            error_log('📋 Datos preparados para PDF: ' . print_r($reserva_data, true));
+
+            // Generar PDF
+            if (!class_exists('ReservasPDFGenerator')) {
+                require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
+            }
+
+            $pdf_generator = new ReservasPDFGenerator();
+            $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
+
+            if (!$pdf_path || !file_exists($pdf_path)) {
+                error_log('❌ PDF no se generó correctamente');
+                wp_send_json_error('Error generando el PDF');
+                return;
+            }
+
+            error_log('✅ PDF generado: ' . $pdf_path);
+            error_log('📁 Tamaño del archivo: ' . filesize($pdf_path) . ' bytes');
+
+            // ✅ CREAR URL PÚBLICO CORRECTO - IGUAL QUE EN LAS OTRAS FUNCIONES
+            $upload_dir = wp_upload_dir();
+            $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
+            $pdf_url = $upload_dir['baseurl'] . $relative_path;
+
+            error_log('🌐 URL del PDF: ' . $pdf_url);
+
+            // Programar eliminación del archivo después de 1 hora
+            wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
+
+            wp_send_json_success(array(
+                'pdf_url' => $pdf_url,
+                'pdf_path' => $pdf_path,
+                'localizador' => $reserva->localizador,
+                'filename' => 'billete_' . $reserva->localizador . '.pdf',
+                'file_exists' => file_exists($pdf_path),
+                'file_size' => filesize($pdf_path)
+            ));
+        } catch (Exception $e) {
+            error_log('❌ Exception en generate_ticket_pdf_from_reports: ' . $e->getMessage());
+            error_log('❌ Stack trace: ' . $e->getTraceAsString());
+            wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
         }
-
-        error_log('✅ Reserva encontrada: ' . print_r($reserva, true));
-
-        // Preparar datos para el PDF
-        $reserva_data = array(
-            'localizador' => $reserva->localizador,
-            'fecha' => $reserva->fecha,
-            'hora' => $reserva->hora,
-            'hora_vuelta' => $reserva->hora_vuelta ?? '',
-            'nombre' => $reserva->nombre,
-            'apellidos' => $reserva->apellidos,
-            'email' => $reserva->email,
-            'telefono' => $reserva->telefono,
-            'adultos' => $reserva->adultos,
-            'residentes' => $reserva->residentes,
-            'ninos_5_12' => $reserva->ninos_5_12,
-            'ninos_menores' => $reserva->ninos_menores,
-            'total_personas' => $reserva->total_personas,
-            'precio_base' => $reserva->precio_base,
-            'descuento_total' => $reserva->descuento_total,
-            'precio_final' => $reserva->precio_final,
-            'precio_adulto' => $reserva->precio_adulto ?? 10.00,
-            'precio_nino' => $reserva->precio_nino ?? 5.00,
-            'precio_residente' => $reserva->precio_residente ?? 5.00,
-            'created_at' => $reserva->created_at,
-            'metodo_pago' => $reserva->metodo_pago ?? 'directo'
-        );
-
-        error_log('📋 Datos preparados para PDF: ' . print_r($reserva_data, true));
-
-        // Generar PDF
-        if (!class_exists('ReservasPDFGenerator')) {
-            require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
-        }
-
-        $pdf_generator = new ReservasPDFGenerator();
-        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
-
-        if (!$pdf_path || !file_exists($pdf_path)) {
-            error_log('❌ PDF no se generó correctamente');
-            wp_send_json_error('Error generando el PDF');
-            return;
-        }
-
-        error_log('✅ PDF generado: ' . $pdf_path);
-        error_log('📁 Tamaño del archivo: ' . filesize($pdf_path) . ' bytes');
-
-        // ✅ CREAR URL PÚBLICO CORRECTO - IGUAL QUE EN LAS OTRAS FUNCIONES
-        $upload_dir = wp_upload_dir();
-        $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
-        $pdf_url = $upload_dir['baseurl'] . $relative_path;
-
-        error_log('🌐 URL del PDF: ' . $pdf_url);
-
-        // Programar eliminación del archivo después de 1 hora
-        wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
-
-        wp_send_json_success(array(
-            'pdf_url' => $pdf_url,
-            'pdf_path' => $pdf_path,
-            'localizador' => $reserva->localizador,
-            'filename' => 'billete_' . $reserva->localizador . '.pdf',
-            'file_exists' => file_exists($pdf_path),
-            'file_size' => filesize($pdf_path)
-        ));
-
-    } catch (Exception $e) {
-        error_log('❌ Exception en generate_ticket_pdf_from_reports: ' . $e->getMessage());
-        error_log('❌ Stack trace: ' . $e->getTraceAsString());
-        wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
     }
-}
 
     /**
      * Obtener lista de agencias para el filtro
@@ -1379,24 +1378,23 @@ public function generate_ticket_pdf_from_reports()
                 wp_send_json_error('Rango de fechas no válido');
         }
 
-        // Obtener estadísticas del período
         $stats = $wpdb->get_row($wpdb->prepare(
-            "SELECT 
-                COUNT(*) as total_reservas,
-                SUM(adultos) as total_adultos,
-                SUM(residentes) as total_residentes,
-                SUM(ninos_5_12) as total_ninos_5_12,
-                SUM(ninos_menores) as total_ninos_menores,
-                SUM(total_personas) as total_personas_con_plaza,
-                SUM(precio_final) as ingresos_totales,
-                SUM(descuento_total) as descuentos_totales,
-                AVG(precio_final) as precio_promedio
-             FROM $table_reservas 
-             WHERE fecha BETWEEN %s AND %s 
-             AND estado = 'confirmada'",
-            $fecha_inicio,
-            $fecha_fin
-        ));
+    "SELECT 
+        COUNT(*) as total_reservas,
+        SUM(adultos) as total_adultos,
+        SUM(residentes) as total_residentes,
+        SUM(ninos_5_12) as total_ninos_5_12,
+        SUM(ninos_menores) as total_ninos_menores,
+        SUM(total_personas) as total_personas_con_plaza,
+        SUM(precio_base - descuento_total) as ingresos_totales,  -- ✅ CORREGIDO
+        SUM(descuento_total) as descuentos_totales,
+        AVG(precio_base - descuento_total) as precio_promedio  -- ✅ CORREGIDO
+     FROM $table_reservas 
+     WHERE fecha BETWEEN %s AND %s 
+     AND estado = 'confirmada'",
+    $fecha_inicio,
+    $fecha_fin
+));
 
         // Obtener reservas por día para gráfico
         $reservas_por_dia = $wpdb->get_results($wpdb->prepare(
@@ -1456,19 +1454,19 @@ public function generate_ticket_pdf_from_reports()
         ));
 
         // 2. INGRESOS DEL MES ACTUAL
-        $ingresos_mes_actual = $wpdb->get_var($wpdb->prepare(
-            "SELECT SUM(precio_final) FROM $table_reservas 
-         WHERE fecha >= %s AND estado = 'confirmada'",
-            $this_month_start
-        )) ?: 0;
+$ingresos_mes_actual = $wpdb->get_var($wpdb->prepare(
+    "SELECT SUM(precio_base - descuento_total) FROM $table_reservas   -- ✅ CORREGIDO
+ WHERE fecha >= %s AND estado = 'confirmada'",
+    $this_month_start
+)) ?: 0;
 
-        // 3. INGRESOS DEL MES PASADO (para comparar)
-        $ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
-            "SELECT SUM(precio_final) FROM $table_reservas 
-         WHERE fecha BETWEEN %s AND %s AND estado = 'confirmada'",
-            $last_month_start,
-            $last_month_end
-        )) ?: 0;
+// 3. INGRESOS DEL MES PASADO (para comparar)
+$ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
+    "SELECT SUM(precio_base - descuento_total) FROM $table_reservas   -- ✅ CORREGIDO
+ WHERE fecha BETWEEN %s AND %s AND estado = 'confirmada'",
+    $last_month_start,
+    $last_month_end
+)) ?: 0;
 
         // 4. CRECIMIENTO PORCENTUAL
         $crecimiento = 0;
@@ -1737,13 +1735,14 @@ public function generate_ticket_pdf_from_reports()
 
                 $stats_por_estado = $wpdb->get_results($wpdb->prepare(
                     "SELECT 
-                    estado,
-                    COUNT(*) as total,
-                    SUM(precio_final) as ingresos
-                 FROM $table_reservas r
-                 $estado_where_clause
-                 GROUP BY estado
-                 ORDER BY total DESC",
+                        estado,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN r.estado = 'confirmada' THEN (r.precio_base - r.descuento_total) ELSE 0 END) as ingresos  -- ✅ CORREGIDO
+                    FROM $table_reservas r
+                    INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+                    $estado_where_clause
+                    GROUP BY r.estado
+                    ORDER BY total DESC",
                     ...$estado_params
                 ));
             }
@@ -2517,132 +2516,131 @@ public function generate_ticket_pdf_from_reports()
     }
 
     /**
- * Generar PDF de ticket para agencias - FUNCIÓN CORREGIDA
- */
-public function generate_agency_ticket_pdf()
-{
-    error_log('=== GENERATE_AGENCY_TICKET_PDF INICIADO ===');
-    
-    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-        error_log('❌ Error de nonce en generate_agency_ticket_pdf');
-        wp_send_json_error('Error de seguridad');
-        return;
-    }
+     * Generar PDF de ticket para agencias - FUNCIÓN CORREGIDA
+     */
+    public function generate_agency_ticket_pdf()
+    {
+        error_log('=== GENERATE_AGENCY_TICKET_PDF INICIADO ===');
 
-    if (!session_id()) {
-        session_start();
-    }
+        if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+            error_log('❌ Error de nonce en generate_agency_ticket_pdf');
+            wp_send_json_error('Error de seguridad');
+            return;
+        }
 
-    if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'agencia') {
-        error_log('❌ Sin permisos en generate_agency_ticket_pdf');
-        wp_send_json_error('Sin permisos');
-        return;
-    }
+        if (!session_id()) {
+            session_start();
+        }
 
-    $reserva_id = intval($_POST['reserva_id']);
-    $agency_id = $_SESSION['reservas_user']['id'];
+        if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'agencia') {
+            error_log('❌ Sin permisos en generate_agency_ticket_pdf');
+            wp_send_json_error('Sin permisos');
+            return;
+        }
 
-    if (!$reserva_id) {
-        error_log('❌ ID de reserva no válido: ' . $reserva_id);
-        wp_send_json_error('ID de reserva no válido');
-        return;
-    }
+        $reserva_id = intval($_POST['reserva_id']);
+        $agency_id = $_SESSION['reservas_user']['id'];
 
-    error_log('🔍 Procesando reserva ID: ' . $reserva_id . ' para agencia ID: ' . $agency_id);
+        if (!$reserva_id) {
+            error_log('❌ ID de reserva no válido: ' . $reserva_id);
+            wp_send_json_error('ID de reserva no válido');
+            return;
+        }
 
-    try {
-        global $wpdb;
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+        error_log('🔍 Procesando reserva ID: ' . $reserva_id . ' para agencia ID: ' . $agency_id);
 
-        // Verificar que la reserva pertenece a la agencia
-        $reserva = $wpdb->get_row($wpdb->prepare(
-            "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente, s.hora_vuelta 
+        try {
+            global $wpdb;
+            $table_reservas = $wpdb->prefix . 'reservas_reservas';
+            $table_servicios = $wpdb->prefix . 'reservas_servicios';
+
+            // Verificar que la reserva pertenece a la agencia
+            $reserva = $wpdb->get_row($wpdb->prepare(
+                "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente, s.hora_vuelta 
              FROM $table_reservas r
              LEFT JOIN $table_servicios s ON r.servicio_id = s.id
              WHERE r.id = %d AND r.agency_id = %d",
-            $reserva_id,
-            $agency_id
-        ));
+                $reserva_id,
+                $agency_id
+            ));
 
-        if (!$reserva) {
-            error_log('❌ Reserva no encontrada o sin permisos: reserva_id=' . $reserva_id . ', agency_id=' . $agency_id);
-            wp_send_json_error('Reserva no encontrada o sin permisos');
-            return;
+            if (!$reserva) {
+                error_log('❌ Reserva no encontrada o sin permisos: reserva_id=' . $reserva_id . ', agency_id=' . $agency_id);
+                wp_send_json_error('Reserva no encontrada o sin permisos');
+                return;
+            }
+
+            error_log('✅ Reserva encontrada para agencia: ' . print_r($reserva, true));
+
+            // Preparar datos para el PDF
+            $reserva_data = array(
+                'localizador' => $reserva->localizador,
+                'fecha' => $reserva->fecha,
+                'hora' => $reserva->hora,
+                'hora_vuelta' => $reserva->hora_vuelta ?? '',
+                'nombre' => $reserva->nombre,
+                'apellidos' => $reserva->apellidos,
+                'email' => $reserva->email,
+                'telefono' => $reserva->telefono,
+                'adultos' => $reserva->adultos,
+                'residentes' => $reserva->residentes,
+                'ninos_5_12' => $reserva->ninos_5_12,
+                'ninos_menores' => $reserva->ninos_menores,
+                'total_personas' => $reserva->total_personas,
+                'precio_base' => $reserva->precio_base,
+                'descuento_total' => $reserva->descuento_total,
+                'precio_final' => $reserva->precio_final,
+                'precio_adulto' => $reserva->precio_adulto ?? 10.00,
+                'precio_nino' => $reserva->precio_nino ?? 5.00,
+                'precio_residente' => $reserva->precio_residente ?? 5.00,
+                'created_at' => $reserva->created_at,
+                'metodo_pago' => $reserva->metodo_pago ?? 'agencia'
+            );
+
+            error_log('📋 Datos preparados para PDF de agencia: ' . print_r($reserva_data, true));
+
+            // Generar PDF
+            if (!class_exists('ReservasPDFGenerator')) {
+                require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
+            }
+
+            $pdf_generator = new ReservasPDFGenerator();
+            $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
+
+            if (!$pdf_path || !file_exists($pdf_path)) {
+                error_log('❌ PDF no se generó correctamente para agencia');
+                wp_send_json_error('Error generando el PDF');
+                return;
+            }
+
+            error_log('✅ PDF generado para agencia: ' . $pdf_path);
+            error_log('📁 Tamaño del archivo: ' . filesize($pdf_path) . ' bytes');
+
+            // ✅ CREAR URL PÚBLICO CORRECTO - IGUAL QUE EN LAS OTRAS FUNCIONES
+            $upload_dir = wp_upload_dir();
+            $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
+            $pdf_url = $upload_dir['baseurl'] . $relative_path;
+
+            error_log('🌐 URL del PDF para agencia: ' . $pdf_url);
+
+            // Programar eliminación del archivo después de 1 hora
+            wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
+
+            wp_send_json_success(array(
+                'pdf_url' => $pdf_url,
+                'pdf_path' => $pdf_path,
+                'localizador' => $reserva->localizador,
+                'filename' => 'billete_' . $reserva->localizador . '.pdf',
+                'file_exists' => file_exists($pdf_path),
+                'file_size' => filesize($pdf_path),
+                'agency_id' => $agency_id
+            ));
+        } catch (Exception $e) {
+            error_log('❌ Exception en generate_agency_ticket_pdf: ' . $e->getMessage());
+            error_log('❌ Stack trace: ' . $e->getTraceAsString());
+            wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
         }
-
-        error_log('✅ Reserva encontrada para agencia: ' . print_r($reserva, true));
-
-        // Preparar datos para el PDF
-        $reserva_data = array(
-            'localizador' => $reserva->localizador,
-            'fecha' => $reserva->fecha,
-            'hora' => $reserva->hora,
-            'hora_vuelta' => $reserva->hora_vuelta ?? '',
-            'nombre' => $reserva->nombre,
-            'apellidos' => $reserva->apellidos,
-            'email' => $reserva->email,
-            'telefono' => $reserva->telefono,
-            'adultos' => $reserva->adultos,
-            'residentes' => $reserva->residentes,
-            'ninos_5_12' => $reserva->ninos_5_12,
-            'ninos_menores' => $reserva->ninos_menores,
-            'total_personas' => $reserva->total_personas,
-            'precio_base' => $reserva->precio_base,
-            'descuento_total' => $reserva->descuento_total,
-            'precio_final' => $reserva->precio_final,
-            'precio_adulto' => $reserva->precio_adulto ?? 10.00,
-            'precio_nino' => $reserva->precio_nino ?? 5.00,
-            'precio_residente' => $reserva->precio_residente ?? 5.00,
-            'created_at' => $reserva->created_at,
-            'metodo_pago' => $reserva->metodo_pago ?? 'agencia'
-        );
-
-        error_log('📋 Datos preparados para PDF de agencia: ' . print_r($reserva_data, true));
-
-        // Generar PDF
-        if (!class_exists('ReservasPDFGenerator')) {
-            require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
-        }
-
-        $pdf_generator = new ReservasPDFGenerator();
-        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
-
-        if (!$pdf_path || !file_exists($pdf_path)) {
-            error_log('❌ PDF no se generó correctamente para agencia');
-            wp_send_json_error('Error generando el PDF');
-            return;
-        }
-
-        error_log('✅ PDF generado para agencia: ' . $pdf_path);
-        error_log('📁 Tamaño del archivo: ' . filesize($pdf_path) . ' bytes');
-
-        // ✅ CREAR URL PÚBLICO CORRECTO - IGUAL QUE EN LAS OTRAS FUNCIONES
-        $upload_dir = wp_upload_dir();
-        $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
-        $pdf_url = $upload_dir['baseurl'] . $relative_path;
-
-        error_log('🌐 URL del PDF para agencia: ' . $pdf_url);
-
-        // Programar eliminación del archivo después de 1 hora
-        wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
-
-        wp_send_json_success(array(
-            'pdf_url' => $pdf_url,
-            'pdf_path' => $pdf_path,
-            'localizador' => $reserva->localizador,
-            'filename' => 'billete_' . $reserva->localizador . '.pdf',
-            'file_exists' => file_exists($pdf_path),
-            'file_size' => filesize($pdf_path),
-            'agency_id' => $agency_id
-        ));
-
-    } catch (Exception $e) {
-        error_log('❌ Exception en generate_agency_ticket_pdf: ' . $e->getMessage());
-        error_log('❌ Stack trace: ' . $e->getTraceAsString());
-        wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
     }
-}
 
     /**
      * Solicitar cancelación de reserva por parte de agencia
