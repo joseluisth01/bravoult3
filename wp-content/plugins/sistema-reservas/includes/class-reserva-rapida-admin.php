@@ -111,75 +111,90 @@ class ReservasReservaRapidaAdmin
 
 
     public function calculate_price()
-    {
-        if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-            wp_send_json_error('Error de seguridad');
-            return;
-        }
+{
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
 
-        $service_id = intval($_POST['service_id']);
-        $adultos = intval($_POST['adultos']);
-        $residentes = intval($_POST['residentes']);
-        $ninos_5_12 = intval($_POST['ninos_5_12']);
-        $ninos_menores = intval($_POST['ninos_menores']);
+    $service_id = intval($_POST['service_id']);
+    $adultos = intval($_POST['adultos']);
+    $residentes = intval($_POST['residentes']);
+    $ninos_5_12 = intval($_POST['ninos_5_12']);
+    $ninos_menores = intval($_POST['ninos_menores']);
 
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'reservas_servicios';
+    // ✅ VERIFICAR SI ES UNA AGENCIA
+    if (!session_id()) {
+        session_start();
+    }
 
-        $servicio = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table_name WHERE id = %d",
-            $service_id
-        ));
+    $user = $_SESSION['reservas_user'] ?? null;
+    $is_agency = ($user && $user['role'] === 'agencia');
 
-        if (!$servicio) {
-            wp_send_json_error('Servicio no encontrado');
-            return;
-        }
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'reservas_servicios';
 
-        // Usar la misma lógica que el frontend
-        $total_personas_con_plaza = $adultos + $residentes + $ninos_5_12;
+    $servicio = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_name WHERE id = %d",
+        $service_id
+    ));
 
-        $precio_base = 0;
-        $precio_base += $adultos * $servicio->precio_adulto;
-        $precio_base += $residentes * $servicio->precio_adulto;
-        $precio_base += $ninos_5_12 * $servicio->precio_adulto;
+    if (!$servicio) {
+        wp_send_json_error('Servicio no encontrado');
+        return;
+    }
 
-        $descuento_total = 0;
+    // Usar la misma lógica que el frontend
+    $total_personas_con_plaza = $adultos + $residentes + $ninos_5_12;
+
+    $precio_base = 0;
+    $precio_base += $adultos * $servicio->precio_adulto;
+    $precio_base += $residentes * $servicio->precio_adulto;
+    $precio_base += $ninos_5_12 * $servicio->precio_adulto;
+
+    $descuento_total = 0;
+    
+    // ✅ PARA AGENCIAS: NO APLICAR DESCUENTOS DE RESIDENTES NI NIÑOS
+    if (!$is_agency) {
         $descuento_residentes = $residentes * ($servicio->precio_adulto - $servicio->precio_residente);
         $descuento_ninos = $ninos_5_12 * ($servicio->precio_adulto - $servicio->precio_nino);
         $descuento_total += $descuento_residentes + $descuento_ninos;
+    }
 
-        $descuento_grupo = 0;
-        $regla_aplicada = null;
+    $descuento_grupo = 0;
+    $regla_aplicada = null;
 
-        if ($total_personas_con_plaza > 0) {
-            if (!class_exists('ReservasDiscountsAdmin')) {
-                require_once RESERVAS_PLUGIN_PATH . 'includes/class-discounts-admin.php';
-            }
-
-            $subtotal = $precio_base - $descuento_total;
-            $discount_info = ReservasDiscountsAdmin::calculate_discount($total_personas_con_plaza, $subtotal, 'total');
-
-            if ($discount_info['discount_applied']) {
-                $descuento_grupo = $discount_info['discount_amount'];
-                $descuento_total += $descuento_grupo;
-                $regla_aplicada = $discount_info;
-            }
+    // ✅ PARA AGENCIAS: NO APLICAR DESCUENTOS POR GRUPO
+    if (!$is_agency && $total_personas_con_plaza > 0) {
+        if (!class_exists('ReservasDiscountsAdmin')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-discounts-admin.php';
         }
 
-        $precio_final = $precio_base - $descuento_total;
-        if ($precio_final < 0) $precio_final = 0;
+        $subtotal = $precio_base - $descuento_total;
+        $discount_info = ReservasDiscountsAdmin::calculate_discount($total_personas_con_plaza, $subtotal, 'total');
 
-        // Respuesta en el mismo formato que el frontend
-        $response_data = array(
-            'precio_base' => round($precio_base, 2),
-            'descuento' => round($descuento_total, 2),
-            'total' => round($precio_final, 2),
-            'regla_descuento_aplicada' => $regla_aplicada
-        );
-
-        wp_send_json_success($response_data);
+        if ($discount_info['discount_applied']) {
+            $descuento_grupo = $discount_info['discount_amount'];
+            $descuento_total += $descuento_grupo;
+            $regla_aplicada = $discount_info;
+        }
     }
+
+    $precio_final = $precio_base - $descuento_total;
+    if ($precio_final < 0) $precio_final = 0;
+
+    // Respuesta en el mismo formato que el frontend
+    $response_data = array(
+        'precio_base' => round($precio_base, 2),
+        'descuento' => round($descuento_total, 2),
+        'total' => round($precio_final, 2),
+        'regla_descuento_aplicada' => $regla_aplicada,
+        'is_agency' => $is_agency, // ✅ NUEVA INFO PARA DEBUG
+        'descuento_aplicado' => !$is_agency // ✅ INDICAR SI SE APLICARON DESCUENTOS
+    );
+
+    wp_send_json_success($response_data);
+}
 
 
     /**
@@ -426,67 +441,73 @@ class ReservasReservaRapidaAdmin
     }
 
     private function process_common_reserva_rapida($datos, $user, $user_type)
-    {
-        // Validar datos del formulario
-        $validation_result = $this->validate_reserva_rapida_data();
-        if (!$validation_result['valid']) {
-            wp_send_json_error($validation_result['error']);
-            return;
-        }
-
-        $datos = $validation_result['data'];
-
-        // Verificar disponibilidad
-        $availability_check = $this->check_service_availability($datos['service_id'], $datos['total_personas']);
-        if (!$availability_check['available']) {
-            wp_send_json_error($availability_check['error']);
-            return;
-        }
-
-        // Recalcular precio final
-        $price_calculation = $this->calculate_final_price($datos);
-        if (!$price_calculation['valid']) {
-            wp_send_json_error($price_calculation['error']);
-            return;
-        }
-
-        // Crear reserva (incluye agency_id si es agencia)
-        $reservation_result = $this->create_reservation($datos, $price_calculation['price_data'], $user, $user_type);
-        if (!$reservation_result['success']) {
-            wp_send_json_error($reservation_result['error']);
-            return;
-        }
-
-        // Actualizar plazas disponibles
-        $update_result = $this->update_available_seats($datos['service_id'], $datos['total_personas']);
-        if (!$update_result['success']) {
-            // Rollback: eliminar reserva creada
-            $this->delete_reservation($reservation_result['reservation_id']);
-            wp_send_json_error('Error actualizando disponibilidad. Reserva cancelada.');
-            return;
-        }
-
-        // Enviar emails de confirmación
-        $this->send_confirmation_emails($reservation_result['reservation_id'], $user, $user_type);
-
-        // Respuesta exitosa
-        $response_data = array(
-            'mensaje' => 'Reserva rápida procesada correctamente',
-            'localizador' => $reservation_result['localizador'],
-            'reserva_id' => $reservation_result['reservation_id'],
-            'admin_user' => $user['username'],
-            'user_type' => $user_type,
-            'detalles' => array(
-                'fecha' => $datos['fecha'],
-                'hora' => $datos['hora'],
-                'personas' => $datos['total_personas'],
-                'precio_final' => $price_calculation['price_data']['precio_final']
-            )
-        );
-
-        error_log('✅ RESERVA RAPIDA COMPLETADA EXITOSAMENTE');
-        wp_send_json_success($response_data);
+{
+    // Validar datos del formulario
+    $validation_result = $this->validate_reserva_rapida_data();
+    if (!$validation_result['valid']) {
+        wp_send_json_error($validation_result['error']);
+        return;
     }
+
+    $datos = $validation_result['data'];
+
+    // Verificar disponibilidad
+    $availability_check = $this->check_service_availability($datos['service_id'], $datos['total_personas']);
+    if (!$availability_check['available']) {
+        wp_send_json_error($availability_check['error']);
+        return;
+    }
+
+    // ✅ PASAR USER_TYPE AL CÁLCULO DE PRECIO
+    $price_calculation = $this->calculate_final_price($datos, $user_type);
+    if (!$price_calculation['valid']) {
+        wp_send_json_error($price_calculation['error']);
+        return;
+    }
+
+    // Crear reserva (incluye agency_id si es agencia)
+    $reservation_result = $this->create_reservation($datos, $price_calculation['price_data'], $user, $user_type);
+    if (!$reservation_result['success']) {
+        wp_send_json_error($reservation_result['error']);
+        return;
+    }
+
+    // Actualizar plazas disponibles
+    $update_result = $this->update_available_seats($datos['service_id'], $datos['total_personas']);
+    if (!$update_result['success']) {
+        // Rollback: eliminar reserva creada
+        $this->delete_reservation($reservation_result['reservation_id']);
+        wp_send_json_error('Error actualizando disponibilidad. Reserva cancelada.');
+        return;
+    }
+
+    // Enviar emails de confirmación
+    $this->send_confirmation_emails($reservation_result['reservation_id'], $user, $user_type);
+
+    // ✅ MENSAJE ESPECÍFICO PARA AGENCIAS
+    $mensaje = $user_type === 'agency' ? 
+        'Reserva rápida de agencia procesada correctamente (precio sin descuentos)' : 
+        'Reserva rápida procesada correctamente';
+
+    // Respuesta exitosa
+    $response_data = array(
+        'mensaje' => $mensaje,
+        'localizador' => $reservation_result['localizador'],
+        'reserva_id' => $reservation_result['reservation_id'],
+        'admin_user' => $user['username'],
+        'user_type' => $user_type,
+        'is_agency' => ($user_type === 'agency'),
+        'detalles' => array(
+            'fecha' => $datos['fecha'],
+            'hora' => $datos['hora'],
+            'personas' => $datos['total_personas'],
+            'precio_final' => $price_calculation['price_data']['precio_final']
+        )
+    );
+
+    error_log('✅ RESERVA RAPIDA COMPLETADA EXITOSAMENTE');
+    wp_send_json_success($response_data);
+}
 
     private function validate_reserva_rapida_data()
     {
@@ -596,65 +617,73 @@ class ReservasReservaRapidaAdmin
     /**
      * Calcular precio final
      */
-    private function calculate_final_price($datos)
-    {
-        global $wpdb;
+    private function calculate_final_price($datos, $user_type = null)
+{
+    global $wpdb;
 
-        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+    $table_servicios = $wpdb->prefix . 'reservas_servicios';
 
-        $servicio = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table_servicios WHERE id = %d",
-            $datos['service_id']
-        ));
+    $servicio = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_servicios WHERE id = %d",
+        $datos['service_id']
+    ));
 
-        if (!$servicio) {
-            return array('valid' => false, 'error' => 'Servicio no encontrado para cálculo');
-        }
+    if (!$servicio) {
+        return array('valid' => false, 'error' => 'Servicio no encontrado para cálculo');
+    }
 
-        // Usar la misma lógica de cálculo que el método calculate_price_rapida
-        $total_personas_con_plaza = $datos['adultos'] + $datos['residentes'] + $datos['ninos_5_12'];
+    // ✅ VERIFICAR SI ES AGENCIA
+    $is_agency = ($user_type === 'agency');
 
-        $precio_base = 0;
-        $precio_base += $datos['adultos'] * $servicio->precio_adulto;
-        $precio_base += $datos['residentes'] * $servicio->precio_adulto;
-        $precio_base += $datos['ninos_5_12'] * $servicio->precio_adulto;
+    $total_personas_con_plaza = $datos['adultos'] + $datos['residentes'] + $datos['ninos_5_12'];
 
-        $descuento_total = 0;
+    $precio_base = 0;
+    $precio_base += $datos['adultos'] * $servicio->precio_adulto;
+    $precio_base += $datos['residentes'] * $servicio->precio_adulto;
+    $precio_base += $datos['ninos_5_12'] * $servicio->precio_adulto;
+
+    $descuento_total = 0;
+    
+    // ✅ PARA AGENCIAS: NO APLICAR DESCUENTOS DE TARIFAS
+    if (!$is_agency) {
         $descuento_residentes = $datos['residentes'] * ($servicio->precio_adulto - $servicio->precio_residente);
         $descuento_ninos = $datos['ninos_5_12'] * ($servicio->precio_adulto - $servicio->precio_nino);
         $descuento_total += $descuento_residentes + $descuento_ninos;
+    }
 
-        $descuento_grupo = 0;
-        $regla_aplicada = null;
+    $descuento_grupo = 0;
+    $regla_aplicada = null;
 
-        if ($total_personas_con_plaza > 0) {
-            if (!class_exists('ReservasDiscountsAdmin')) {
-                require_once RESERVAS_PLUGIN_PATH . 'includes/class-discounts-admin.php';
-            }
-
-            $subtotal = $precio_base - $descuento_total;
-            $discount_info = ReservasDiscountsAdmin::calculate_discount($total_personas_con_plaza, $subtotal, 'total');
-
-            if ($discount_info['discount_applied']) {
-                $descuento_grupo = $discount_info['discount_amount'];
-                $descuento_total += $descuento_grupo;
-                $regla_aplicada = $discount_info;
-            }
+    // ✅ PARA AGENCIAS: NO APLICAR DESCUENTOS POR GRUPO
+    if (!$is_agency && $total_personas_con_plaza > 0) {
+        if (!class_exists('ReservasDiscountsAdmin')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-discounts-admin.php';
         }
 
-        $precio_final = $precio_base - $descuento_total;
-        if ($precio_final < 0) $precio_final = 0;
+        $subtotal = $precio_base - $descuento_total;
+        $discount_info = ReservasDiscountsAdmin::calculate_discount($total_personas_con_plaza, $subtotal, 'total');
 
-        return array(
-            'valid' => true,
-            'price_data' => array(
-                'precio_base' => round($precio_base, 2),
-                'descuento_total' => round($descuento_total, 2),
-                'precio_final' => round($precio_final, 2),
-                'regla_descuento_aplicada' => $regla_aplicada
-            )
-        );
+        if ($discount_info['discount_applied']) {
+            $descuento_grupo = $discount_info['discount_amount'];
+            $descuento_total += $descuento_grupo;
+            $regla_aplicada = $discount_info;
+        }
     }
+
+    $precio_final = $precio_base - $descuento_total;
+    if ($precio_final < 0) $precio_final = 0;
+
+    return array(
+        'valid' => true,
+        'price_data' => array(
+            'precio_base' => round($precio_base, 2),
+            'descuento_total' => round($descuento_total, 2),
+            'precio_final' => round($precio_final, 2),
+            'regla_descuento_aplicada' => $regla_aplicada,
+            'is_agency' => $is_agency
+        )
+    );
+}
 
     /**
      * ✅ ACTUALIZADO: Crear reserva en la base de datos (incluye agency_id si es agencia)

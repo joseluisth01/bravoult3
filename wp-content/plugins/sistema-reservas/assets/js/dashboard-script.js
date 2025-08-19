@@ -9318,7 +9318,35 @@ function loadAgencyPrices() {
 
     const service = findAgencyServiceById(agencySelectedServiceId);
     if (service) {
-        // ✅ NO MOSTRAR PRECIOS INDIVIDUALES EN LA INTERFAZ
+        // ✅ MOSTRAR INFORMACIÓN SOBRE PRECIOS SIN DESCUENTO
+        let priceInfo = document.getElementById('agency-price-info');
+        if (!priceInfo) {
+            priceInfo = document.createElement('div');
+            priceInfo.id = 'agency-price-info';
+            priceInfo.style.cssText = `
+                background: #fff3cd;
+                color: #856404;
+                padding: 15px;
+                border-radius: 6px;
+                margin-bottom: 20px;
+                border-left: 4px solid #ffc107;
+                font-size: 14px;
+            `;
+            priceInfo.innerHTML = `
+                <strong>💼 Tarifas para Agencias:</strong><br>
+                • Adultos: <strong>${service.precio_adulto}€</strong> (precio completo)<br>
+                • Residentes: <strong>${service.precio_adulto}€</strong> (precio completo)<br>
+                • Niños (5-12): <strong>${service.precio_adulto}€</strong> (precio completo)<br>
+                • Bebés: <strong>GRATIS</strong><br><br>
+                <em>Las agencias no tienen descuentos automáticos aplicados.</em>
+            `;
+            
+            // Insertar en el paso 2
+            const step2 = document.getElementById('agency-step-2');
+            const personsGrid = step2.querySelector('.admin-persons-grid');
+            step2.insertBefore(priceInfo, personsGrid);
+        }
+        
         // Solo calcular el precio total
         calculateAgencyTotalPrice();
     }
@@ -9391,9 +9419,37 @@ function calculateAgencyTotalPrice() {
 }
 
 function updateAgencyPricingDisplay(result) {
-    // ✅ NO MOSTRAR INFORMACIÓN DE DESCUENTOS
-    // Solo mostrar el precio total final
+    // ✅ PARA AGENCIAS: NO MOSTRAR INFORMACIÓN DE DESCUENTOS
+    // Solo mostrar el precio total final sin descuentos
     const totalPrice = parseFloat(result.total) || 0;
+    
+    // ✅ MOSTRAR MENSAJE INFORMATIVO SI ES AGENCIA
+    if (result.is_agency) {
+        // Crear mensaje informativo sobre tarifas de agencia
+        let infoMessage = document.getElementById('agency-pricing-info');
+        if (!infoMessage) {
+            infoMessage = document.createElement('div');
+            infoMessage.id = 'agency-pricing-info';
+            infoMessage.style.cssText = `
+                background: #e3f2fd;
+                color: #1976d2;
+                padding: 10px 15px;
+                border-radius: 4px;
+                margin-bottom: 15px;
+                font-size: 14px;
+                border-left: 4px solid #1976d2;
+            `;
+            infoMessage.innerHTML = `
+                <strong>ℹ️ Tarifa de Agencia:</strong> Se aplican precios completos sin descuentos automáticos.
+                Adultos y residentes pagan precio completo. Niños pagan precio completo.
+            `;
+            
+            // Insertar antes del precio total
+            const priceContainer = document.getElementById('agency-total-price').parentElement;
+            priceContainer.insertBefore(infoMessage, priceContainer.firstChild);
+        }
+    }
+    
     document.getElementById('agency-total-price').textContent = totalPrice.toFixed(2) + '€';
 }
 
