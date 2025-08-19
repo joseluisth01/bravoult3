@@ -147,20 +147,22 @@ class ReservasReservaRapidaAdmin
     // Usar la misma lógica que el frontend
     $total_personas_con_plaza = $adultos + $residentes + $ninos_5_12;
 
+    // ✅ CALCULAR PRECIO BASE CORRECTO
     $precio_base = 0;
-    $precio_base += $adultos * $servicio->precio_adulto;
-    $precio_base += $residentes * $servicio->precio_adulto;
-    $precio_base += $ninos_5_12 * $servicio->precio_adulto;
-
-    $descuento_total = 0;
     
-    // ✅ PARA AGENCIAS: NO APLICAR DESCUENTOS DE RESIDENTES NI NIÑOS
-    if (!$is_agency) {
-        $descuento_residentes = $residentes * ($servicio->precio_adulto - $servicio->precio_residente);
-        $descuento_ninos = $ninos_5_12 * ($servicio->precio_adulto - $servicio->precio_nino);
-        $descuento_total += $descuento_residentes + $descuento_ninos;
+    if ($is_agency) {
+        // ✅ PARA AGENCIAS: TODOS PAGAN PRECIO ADULTO
+        $precio_base += $adultos * $servicio->precio_adulto;
+        $precio_base += $residentes * $servicio->precio_adulto;
+        $precio_base += $ninos_5_12 * $servicio->precio_adulto;
+    } else {
+        // ✅ PARA ADMIN: CADA TIPO PAGA SU TARIFA
+        $precio_base += $adultos * $servicio->precio_adulto;
+        $precio_base += $residentes * $servicio->precio_residente;
+        $precio_base += $ninos_5_12 * $servicio->precio_nino;
     }
 
+    $descuento_total = 0;
     $descuento_grupo = 0;
     $regla_aplicada = null;
 
@@ -170,7 +172,7 @@ class ReservasReservaRapidaAdmin
             require_once RESERVAS_PLUGIN_PATH . 'includes/class-discounts-admin.php';
         }
 
-        $subtotal = $precio_base - $descuento_total;
+        $subtotal = $precio_base;
         $discount_info = ReservasDiscountsAdmin::calculate_discount($total_personas_con_plaza, $subtotal, 'total');
 
         if ($discount_info['discount_applied']) {
@@ -189,8 +191,8 @@ class ReservasReservaRapidaAdmin
         'descuento' => round($descuento_total, 2),
         'total' => round($precio_final, 2),
         'regla_descuento_aplicada' => $regla_aplicada,
-        'is_agency' => $is_agency, // ✅ NUEVA INFO PARA DEBUG
-        'descuento_aplicado' => !$is_agency // ✅ INDICAR SI SE APLICARON DESCUENTOS
+        'is_agency' => $is_agency,
+        'descuento_aplicado' => !$is_agency
     );
 
     wp_send_json_success($response_data);
@@ -637,19 +639,22 @@ class ReservasReservaRapidaAdmin
 
     $total_personas_con_plaza = $datos['adultos'] + $datos['residentes'] + $datos['ninos_5_12'];
 
+    // ✅ CALCULAR PRECIO BASE CORRECTO
     $precio_base = 0;
-    $precio_base += $datos['adultos'] * $servicio->precio_adulto;
-    $precio_base += $datos['residentes'] * $servicio->precio_adulto;
-    $precio_base += $datos['ninos_5_12'] * $servicio->precio_adulto;
+    
+    if ($is_agency) {
+        // ✅ PARA AGENCIAS: TODOS PAGAN PRECIO ADULTO (SIN DESCUENTOS)
+        $precio_base += $datos['adultos'] * $servicio->precio_adulto;
+        $precio_base += $datos['residentes'] * $servicio->precio_adulto;
+        $precio_base += $datos['ninos_5_12'] * $servicio->precio_adulto;
+    } else {
+        // ✅ PARA ADMIN: CADA TIPO PAGA SU TARIFA
+        $precio_base += $datos['adultos'] * $servicio->precio_adulto;
+        $precio_base += $datos['residentes'] * $servicio->precio_residente;
+        $precio_base += $datos['ninos_5_12'] * $servicio->precio_nino;
+    }
 
     $descuento_total = 0;
-    
-    // ✅ PARA AGENCIAS: NO APLICAR DESCUENTOS DE TARIFAS
-    if (!$is_agency) {
-        $descuento_residentes = $datos['residentes'] * ($servicio->precio_adulto - $servicio->precio_residente);
-        $descuento_ninos = $datos['ninos_5_12'] * ($servicio->precio_adulto - $servicio->precio_nino);
-        $descuento_total += $descuento_residentes + $descuento_ninos;
-    }
 
     $descuento_grupo = 0;
     $regla_aplicada = null;
@@ -660,7 +665,7 @@ class ReservasReservaRapidaAdmin
             require_once RESERVAS_PLUGIN_PATH . 'includes/class-discounts-admin.php';
         }
 
-        $subtotal = $precio_base - $descuento_total;
+        $subtotal = $precio_base;
         $discount_info = ReservasDiscountsAdmin::calculate_discount($total_personas_con_plaza, $subtotal, 'total');
 
         if ($discount_info['discount_applied']) {

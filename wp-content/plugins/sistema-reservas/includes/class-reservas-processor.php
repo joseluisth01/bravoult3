@@ -481,111 +481,104 @@ private function send_confirmation_emails_array($reserva_array)
      * Recalcular precio para verificar
      */
     private function recalcular_precio($datos_reserva)
-    {
-        error_log('=== RECALCULANDO PRECIO ===');
+{
+    error_log('=== RECALCULANDO PRECIO ===');
 
-        global $wpdb;
+    global $wpdb;
 
-        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+    $table_servicios = $wpdb->prefix . 'reservas_servicios';
 
-        $servicio = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table_servicios WHERE id = %d",
-            $datos_reserva['service_id']
-        ));
+    $servicio = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_servicios WHERE id = %d",
+        $datos_reserva['service_id']
+    ));
 
-        if (!$servicio) {
-            return array('valido' => false, 'error' => 'Servicio no encontrado para cálculo');
-        }
-
-        $adultos = intval($datos_reserva['adultos']);
-        $residentes = intval($datos_reserva['residentes']);
-        $ninos_5_12 = intval($datos_reserva['ninos_5_12']);
-        $ninos_menores = intval($datos_reserva['ninos_menores']);
-
-        // Calcular total de personas que ocupan plaza
-        $total_personas_con_plaza = $adultos + $residentes + $ninos_5_12;
-
-        error_log("Personas calculadas - Adultos: $adultos, Residentes: $residentes, Niños 5-12: $ninos_5_12, Menores: $ninos_menores");
-        error_log("Total personas con plaza: $total_personas_con_plaza");
-
-        // Calcular precio base (todos empiezan pagando precio de adulto)
-        $precio_base = 0;
-        $precio_base += $adultos * $servicio->precio_adulto;
-        $precio_base += $residentes * $servicio->precio_adulto;
-        $precio_base += $ninos_5_12 * $servicio->precio_adulto;
-
-        error_log("Precio base calculado: $precio_base");
-
-        // Calcular descuentos individuales
-        $descuento_total = 0;
-
-        // Descuento residentes (diferencia entre precio adulto y residente)
-        $descuento_residentes = $residentes * ($servicio->precio_adulto - $servicio->precio_residente);
-        $descuento_total += $descuento_residentes;
-        error_log("Descuento residentes: $descuento_residentes");
-
-        // Descuento niños (diferencia entre precio adulto y niño)
-        $descuento_ninos = $ninos_5_12 * ($servicio->precio_adulto - $servicio->precio_nino);
-        $descuento_total += $descuento_ninos;
-        error_log("Descuento niños: $descuento_ninos");
-
-        // Calcular descuento por grupo (solo si hay suficientes personas)
-        $descuento_grupo = 0;
-        $regla_aplicada = null;
-
-        if ($total_personas_con_plaza > 0) {
-            if (!class_exists('ReservasDiscountsAdmin')) {
-                require_once RESERVAS_PLUGIN_PATH . 'includes/class-discounts-admin.php';
-            }
-
-            // Calcular subtotal después de descuentos individuales
-            $subtotal = $precio_base - $descuento_total;
-            error_log("Subtotal antes de descuento por grupo: $subtotal");
-
-            $discount_info = ReservasDiscountsAdmin::calculate_discount($total_personas_con_plaza, $subtotal, 'total');
-
-            error_log("Información de descuento por grupo: " . print_r($discount_info, true));
-
-            if ($discount_info['discount_applied']) {
-                $descuento_grupo = $discount_info['discount_amount'];
-                $descuento_total += $descuento_grupo;
-                $regla_aplicada = $discount_info;
-                error_log("✅ Descuento por grupo aplicado: $descuento_grupo");
-            } else {
-                error_log("❌ No se aplicó descuento por grupo (insuficientes personas: $total_personas_con_plaza)");
-            }
-        }
-
-        // Descuento específico del servicio
-        $descuento_servicio = 0;
-        if ($servicio->tiene_descuento && floatval($servicio->porcentaje_descuento) > 0) {
-            $subtotal_actual = $precio_base - $descuento_total;
-            $descuento_servicio = ($subtotal_actual * floatval($servicio->porcentaje_descuento)) / 100;
-            $descuento_total += $descuento_servicio;
-            error_log("Descuento del servicio: $descuento_servicio");
-        }
-
-        // Precio final
-        $precio_final = $precio_base - $descuento_total;
-        if ($precio_final < 0)
-            $precio_final = 0;
-
-        $precio_info = array(
-            'precio_base' => round($precio_base, 2),
-            'descuento_total' => round($descuento_total, 2),
-            'descuento_residentes' => round($descuento_residentes, 2),
-            'descuento_ninos' => round($descuento_ninos, 2),
-            'descuento_grupo' => round($descuento_grupo, 2),
-            'descuento_servicio' => round($descuento_servicio, 2),
-            'precio_final' => round($precio_final, 2),
-            'regla_descuento_aplicada' => $regla_aplicada,
-            'total_personas_con_plaza' => $total_personas_con_plaza
-        );
-
-        error_log('Precio calculado final: ' . print_r($precio_info, true));
-
-        return array('valido' => true, 'precio' => $precio_info);
+    if (!$servicio) {
+        return array('valido' => false, 'error' => 'Servicio no encontrado para cálculo');
     }
+
+    $adultos = intval($datos_reserva['adultos']);
+    $residentes = intval($datos_reserva['residentes']);
+    $ninos_5_12 = intval($datos_reserva['ninos_5_12']);
+    $ninos_menores = intval($datos_reserva['ninos_menores']);
+
+    // Calcular total de personas que ocupan plaza
+    $total_personas_con_plaza = $adultos + $residentes + $ninos_5_12;
+
+    error_log("Personas calculadas - Adultos: $adultos, Residentes: $residentes, Niños 5-12: $ninos_5_12, Menores: $ninos_menores");
+    error_log("Total personas con plaza: $total_personas_con_plaza");
+
+    // ✅ CALCULAR PRECIO BASE CORRECTO (cada tipo de persona paga su tarifa)
+    $precio_base = 0;
+    $precio_base += $adultos * $servicio->precio_adulto;      // Adultos pagan precio adulto
+    $precio_base += $residentes * $servicio->precio_residente; // ✅ Residentes pagan precio residente
+    $precio_base += $ninos_5_12 * $servicio->precio_nino;     // ✅ Niños pagan precio niño
+
+    error_log("Precio base calculado CORRECTO: $precio_base");
+    error_log("- Adultos ($adultos × {$servicio->precio_adulto}): " . ($adultos * $servicio->precio_adulto));
+    error_log("- Residentes ($residentes × {$servicio->precio_residente}): " . ($residentes * $servicio->precio_residente));
+    error_log("- Niños ($ninos_5_12 × {$servicio->precio_nino}): " . ($ninos_5_12 * $servicio->precio_nino));
+
+    // ✅ NO HAY DESCUENTOS INDIVIDUALES PORQUE YA APLICAMOS LAS TARIFAS CORRECTAS
+    $descuento_total = 0;
+
+    // Calcular descuento por grupo (solo si hay suficientes personas)
+    $descuento_grupo = 0;
+    $regla_aplicada = null;
+
+    if ($total_personas_con_plaza > 0) {
+        if (!class_exists('ReservasDiscountsAdmin')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-discounts-admin.php';
+        }
+
+        // El subtotal es el precio base (ya con tarifas correctas)
+        $subtotal = $precio_base;
+        error_log("Subtotal para descuento por grupo: $subtotal");
+
+        $discount_info = ReservasDiscountsAdmin::calculate_discount($total_personas_con_plaza, $subtotal, 'total');
+
+        error_log("Información de descuento por grupo: " . print_r($discount_info, true));
+
+        if ($discount_info['discount_applied']) {
+            $descuento_grupo = $discount_info['discount_amount'];
+            $descuento_total += $descuento_grupo;
+            $regla_aplicada = $discount_info;
+            error_log("✅ Descuento por grupo aplicado: $descuento_grupo");
+        } else {
+            error_log("❌ No se aplicó descuento por grupo (insuficientes personas: $total_personas_con_plaza)");
+        }
+    }
+
+    // Descuento específico del servicio
+    $descuento_servicio = 0;
+    if ($servicio->tiene_descuento && floatval($servicio->porcentaje_descuento) > 0) {
+        $subtotal_actual = $precio_base - $descuento_total;
+        $descuento_servicio = ($subtotal_actual * floatval($servicio->porcentaje_descuento)) / 100;
+        $descuento_total += $descuento_servicio;
+        error_log("Descuento del servicio: $descuento_servicio");
+    }
+
+    // Precio final
+    $precio_final = $precio_base - $descuento_total;
+    if ($precio_final < 0)
+        $precio_final = 0;
+
+    $precio_info = array(
+        'precio_base' => round($precio_base, 2),
+        'descuento_total' => round($descuento_total, 2),
+        'descuento_residentes' => 0, // ✅ Ya no hay descuento separado
+        'descuento_ninos' => 0,      // ✅ Ya no hay descuento separado
+        'descuento_grupo' => round($descuento_grupo, 2),
+        'descuento_servicio' => round($descuento_servicio, 2),
+        'precio_final' => round($precio_final, 2),
+        'regla_descuento_aplicada' => $regla_aplicada,
+        'total_personas_con_plaza' => $total_personas_con_plaza
+    );
+
+    error_log('Precio calculado final CORRECTO: ' . print_r($precio_info, true));
+
+    return array('valido' => true, 'precio' => $precio_info);
+}
 
     /**
      * Crear reserva en la base de datos - VERSIÓN CORREGIDA
