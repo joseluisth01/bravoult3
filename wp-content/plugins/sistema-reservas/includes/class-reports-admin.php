@@ -340,31 +340,29 @@ class ReservasReportsAdmin
         $stats_count_where = 'WHERE ' . implode(' AND ', $stats_count_conditions);
         $stats_revenue_where = 'WHERE ' . implode(' AND ', $stats_revenue_conditions);
 
-        // Consulta para conteos (respeta filtro de estado) - CON SERVICIOS
         $stats_count = $wpdb->get_row($wpdb->prepare(
-            "SELECT 
-                COUNT(*) as total_reservas,
-                SUM(r.adultos) as total_adultos,
-                SUM(r.residentes) as total_residentes,
-                SUM(r.ninos_5_12) as total_ninos_5_12,
-                SUM(r.ninos_menores) as total_ninos_menores,
-                SUM(r.total_personas) as total_personas_con_plaza,
-                SUM(r.descuento_total) as descuentos_totales
-             FROM $table_reservas r
-             INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-             $stats_count_where",
-            ...$stats_count_params
-        ));
+    "SELECT 
+        COUNT(*) as total_reservas,
+        SUM(r.adultos) as total_adultos,
+        SUM(r.residentes) as total_residentes,
+        SUM(r.ninos_5_12) as total_ninos_5_12,
+        SUM(r.ninos_menores) as total_ninos_menores,
+        SUM(r.total_personas) as total_personas_con_plaza,
+        SUM(r.descuento_total) as descuentos_totales
+     FROM $table_reservas r
+     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+     $stats_count_where",
+    ...$stats_count_params
+));
 
-        // Consulta para ingresos (siempre solo confirmadas) - CON SERVICIOS
         $stats_revenue = $wpdb->get_row($wpdb->prepare(
-            "SELECT 
-                SUM(r.precio_final) as ingresos_totales
-             FROM $table_reservas r
-             INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-             $stats_revenue_where",
-            ...$stats_revenue_params
-        ));
+    "SELECT 
+        SUM(r.precio_final) as ingresos_totales  -- ✅ USAR PRECIO_FINAL
+     FROM $table_reservas r
+     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+     $stats_revenue_where",
+    ...$stats_revenue_params
+));
 
         // Combinar estadísticas
         $stats = (object) array(

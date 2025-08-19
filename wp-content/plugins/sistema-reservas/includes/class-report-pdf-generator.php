@@ -277,52 +277,52 @@ class ReservasReportPDFGenerator
     }
 
     private function group_reservations($reservas)
-    {
-        $grouped = array();
+{
+    $grouped = array();
 
-        foreach ($reservas as $reserva) {
-            $fecha = $reserva->fecha;
-            $turno = $this->get_turno_name($reserva->servicio_hora, $reserva->servicio_hora_vuelta);
-            $origen = $this->get_origen_name($reserva);
+    foreach ($reservas as $reserva) {
+        $fecha = $reserva->fecha;
+        $turno = $this->get_turno_name($reserva->servicio_hora, $reserva->servicio_hora_vuelta);
+        $origen = $this->get_origen_name($reserva);
 
-            // Inicializar estructura si no existe
-            if (!isset($grouped[$fecha])) {
-                $grouped[$fecha] = array();
-            }
-
-            if (!isset($grouped[$fecha][$turno])) {
-                $grouped[$fecha][$turno] = array();
-            }
-
-            if (!isset($grouped[$fecha][$turno][$origen])) {
-                $grouped[$fecha][$turno][$origen] = array(
-                    'reservas' => array(),
-                    'totales' => array(
-                        'adultos' => 0,
-                        'ninos_5_12' => 0,
-                        'bebes' => 0, // ✅ CAMBIO: SEPARAR BEBÉS
-                        'residentes' => 0,
-                        'descuentos' => 0,
-                        'importe' => 0
-                    )
-                );
-            }
-
-            // Añadir reserva
-            $grouped[$fecha][$turno][$origen]['reservas'][] = $reserva;
-
-            // ✅ CORRECCIÓN: SUMAR CORRECTAMENTE LOS TOTALES
-            $totales = &$grouped[$fecha][$turno][$origen]['totales'];
-            $totales['adultos'] += $reserva->adultos;
-            $totales['ninos_5_12'] += $reserva->ninos_5_12; // Solo niños de 5-12
-            $totales['bebes'] += $reserva->ninos_menores; // ✅ BEBÉS SEPARADOS
-            $totales['residentes'] += $reserva->residentes;
-            $totales['descuentos'] += $reserva->descuento_total;
-            $totales['importe'] += $reserva->precio_final;
+        // Inicializar estructura si no existe
+        if (!isset($grouped[$fecha])) {
+            $grouped[$fecha] = array();
         }
 
-        return $grouped;
+        if (!isset($grouped[$fecha][$turno])) {
+            $grouped[$fecha][$turno] = array();
+        }
+
+        if (!isset($grouped[$fecha][$turno][$origen])) {
+            $grouped[$fecha][$turno][$origen] = array(
+                'reservas' => array(),
+                'totales' => array(
+                    'adultos' => 0,
+                    'ninos_5_12' => 0,
+                    'bebes' => 0,
+                    'residentes' => 0,
+                    'descuentos' => 0,
+                    'importe' => 0
+                )
+            );
+        }
+
+        // Añadir reserva
+        $grouped[$fecha][$turno][$origen]['reservas'][] = $reserva;
+
+        // ✅ CORRECCIÓN: USAR precio_final DIRECTAMENTE DESDE LA RESERVA
+        $totales = &$grouped[$fecha][$turno][$origen]['totales'];
+        $totales['adultos'] += $reserva->adultos;
+        $totales['ninos_5_12'] += $reserva->ninos_5_12;
+        $totales['bebes'] += $reserva->ninos_menores;
+        $totales['residentes'] += $reserva->residentes;
+        $totales['descuentos'] += $reserva->descuento_total;
+        $totales['importe'] += $reserva->precio_final; // ✅ USAR PRECIO_FINAL DE LA RESERVA
     }
+
+    return $grouped;
+}
 
     private function get_turno_name($hora, $hora_vuelta)
     {
@@ -351,36 +351,36 @@ class ReservasReportPDFGenerator
     }
 
     private function calculate_agency_totals($reservas)
-    {
-        $totales = array();
+{
+    $totales = array();
 
-        foreach ($reservas as $reserva) {
-            $origen = $this->get_origen_name($reserva);
+    foreach ($reservas as $reserva) {
+        $origen = $this->get_origen_name($reserva);
 
-            if (!isset($totales[$origen])) {
-                $totales[$origen] = array(
-                    'adultos' => 0,
-                    'ninos_5_12' => 0,
-                    'bebes' => 0, // ✅ BEBÉS SEPARADOS
-                    'residentes' => 0,
-                    'descuentos' => 0,
-                    'importe' => 0,
-                    'count' => 0
-                );
-            }
-
-            // ✅ CORRECCIÓN: SUMAR CORRECTAMENTE
-            $totales[$origen]['adultos'] += $reserva->adultos;
-            $totales[$origen]['ninos_5_12'] += $reserva->ninos_5_12; // Solo niños de 5-12
-            $totales[$origen]['bebes'] += $reserva->ninos_menores; // ✅ BEBÉS SEPARADOS
-            $totales[$origen]['residentes'] += $reserva->residentes;
-            $totales[$origen]['descuentos'] += $reserva->descuento_total;
-            $totales[$origen]['importe'] += $reserva->precio_final;
-            $totales[$origen]['count'] += 1;
+        if (!isset($totales[$origen])) {
+            $totales[$origen] = array(
+                'adultos' => 0,
+                'ninos_5_12' => 0,
+                'bebes' => 0,
+                'residentes' => 0,
+                'descuentos' => 0,
+                'importe' => 0,
+                'count' => 0
+            );
         }
 
-        return $totales;
+        // ✅ CORRECCIÓN: USAR precio_final DIRECTAMENTE DESDE LA RESERVA
+        $totales[$origen]['adultos'] += $reserva->adultos;
+        $totales[$origen]['ninos_5_12'] += $reserva->ninos_5_12;
+        $totales[$origen]['bebes'] += $reserva->ninos_menores;
+        $totales[$origen]['residentes'] += $reserva->residentes;
+        $totales[$origen]['descuentos'] += $reserva->descuento_total;
+        $totales[$origen]['importe'] += $reserva->precio_final; // ✅ USAR PRECIO_FINAL DE LA RESERVA
+        $totales[$origen]['count'] += 1;
     }
+
+    return $totales;
+}
 
     private function add_header($filtros)
     {
