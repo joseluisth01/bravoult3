@@ -2571,27 +2571,30 @@ $ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
 
         error_log('✅ Reserva encontrada para agencia: ' . print_r($reserva, true));
 
-        // ✅ PREPARAR DATOS PARA EL PDF SIN PRECIOS PARA AGENCIAS
         $reserva_data = array(
-            'localizador' => $reserva->localizador,
-            'fecha' => $reserva->fecha,
-            'hora' => $reserva->hora,
-            'hora_vuelta' => $reserva->hora_vuelta ?? '',
-            'nombre' => $reserva->nombre,
-            'apellidos' => $reserva->apellidos,
-            'email' => $reserva->email,
-            'telefono' => $reserva->telefono,
-            'adultos' => $reserva->adultos,
-            'residentes' => $reserva->residentes,
-            'ninos_5_12' => $reserva->ninos_5_12,
-            'ninos_menores' => $reserva->ninos_menores,
-            'total_personas' => $reserva->total_personas,
-            'created_at' => $reserva->created_at,
-            'metodo_pago' => 'agencia',
-            // ✅ AÑADIR FLAG PARA OCULTAR PRECIOS
-            'hide_prices' => true,
-            'is_agency_pdf' => true
-        );
+    'localizador' => $reserva->localizador,
+    'fecha' => $reserva->fecha,
+    'hora' => $reserva->hora,
+    'hora_vuelta' => $reserva->hora_vuelta ?? '',
+    'nombre' => $reserva->nombre,
+    'apellidos' => $reserva->apellidos,
+    'email' => $reserva->email,
+    'telefono' => $reserva->telefono,
+    'adultos' => $reserva->adultos,
+    'residentes' => $reserva->residentes,
+    'ninos_5_12' => $reserva->ninos_5_12,
+    'ninos_menores' => $reserva->ninos_menores,
+    'total_personas' => $reserva->total_personas,
+    'created_at' => $reserva->created_at,
+    'metodo_pago' => 'agencia',
+    // ✅ AÑADIR FLAGS PARA OCULTAR PRECIOS
+    'hide_prices' => true,
+    'is_agency_pdf' => true,
+    // ✅ AÑADIR VALORES POR DEFECTO PARA EVITAR ERRORES
+    'precio_base' => 0,
+    'descuento_total' => 0,
+    'precio_final' => 0
+);
 
         error_log('📋 Datos preparados para PDF de agencia (sin precios): ' . print_r($reserva_data, true));
 

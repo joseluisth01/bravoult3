@@ -1403,6 +1403,13 @@ public static function send_reminder_email($reserva_data)
     $fecha_formateada = date('d/m/Y', strtotime($reserva['fecha']));
     $fecha_creacion = date('d/m/Y H:i', strtotime($reserva['created_at'] ?? 'now'));
 
+    // ✅ PREPARAR DETALLES DE PERSONAS SIN PRECIOS
+    $personas_detalle = "";
+    if ($reserva['adultos'] > 0) $personas_detalle .= "Adultos: " . $reserva['adultos'] . "<br>";
+    if ($reserva['residentes'] > 0) $personas_detalle .= "Residentes: " . $reserva['residentes'] . "<br>";
+    if ($reserva['ninos_5_12'] > 0) $personas_detalle .= "Niños (5-12 años): " . $reserva['ninos_5_12'] . "<br>";
+    if ($reserva['ninos_menores'] > 0) $personas_detalle .= "Niños menores (gratis): " . $reserva['ninos_menores'] . "<br>";
+
     return "
     <!DOCTYPE html>
     <html>
@@ -1429,7 +1436,7 @@ public static function send_reminder_email($reserva_data)
             <p style='margin: 0; font-size: 14px; color: #2D2D2D; font-weight: 500;'>Reserva confirmada</p>
         </div>
 
-        <!-- Resumen -->
+        <!-- Resumen SIN PRECIOS -->
         <div style='padding: 40px 30px; background: #FFFFFF;'>
             <h3 style='margin: 0 0 25px 0; font-size: 20px; font-weight: 700; color: #0073aa; text-align: center;'>Resumen de la Operación</h3>
             
@@ -1443,10 +1450,25 @@ public static function send_reminder_email($reserva_data)
                     <td style='padding: 15px 25px; border-bottom: 1px solid #E0E0E0; text-align: right; font-weight: 700; color: #0073aa;'>" . $fecha_formateada . " - " . substr($reserva['hora'], 0, 5) . "</td>
                 </tr>
                 <tr>
+                    <td style='padding: 15px 25px; border-bottom: 1px solid #E0E0E0; font-weight: 600; color: #2D2D2D;'>Hora de vuelta:</td>
+                    <td style='padding: 15px 25px; border-bottom: 1px solid #E0E0E0; text-align: right; font-weight: 700; color: #0073aa;'>" . substr($reserva['hora_vuelta'] ?? '', 0, 5) . "</td>
+                </tr>
+                <tr>
                     <td style='padding: 15px 25px; font-weight: 600; color: #2D2D2D;'>Total personas:</td>
                     <td style='padding: 15px 25px; text-align: right; font-weight: 700; color: #0073aa;'>" . $reserva['total_personas'] . "</td>
                 </tr>
             </table>
+
+            <!-- ✅ DISTRIBUCIÓN DE VIAJEROS SIN PRECIOS -->
+            <div style='margin-top: 30px; padding: 25px; background: #F8F9FA; border-radius: 8px; border: 1px solid #E0E0E0;'>
+                <h4 style='margin: 0 0 15px 0; color: #0073aa; font-size: 16px;'>Distribución de Viajeros:</h4>
+                <div style='font-size: 16px; color: #2D2D2D; line-height: 1.8;'>
+                    " . $personas_detalle . "
+                </div>
+                <div style='margin-top: 15px; padding-top: 15px; border-top: 2px solid #0073aa; text-align: center;'>
+                    <p style='margin: 0; font-weight: 700; color: #0073aa; font-size: 18px;'>Total plazas ocupadas: " . $reserva['total_personas'] . "</p>
+                </div>
+            </div>
 
             <div style='background: #E8F4F8; padding: 25px; border-radius: 8px; margin-top: 25px; border-left: 4px solid #0073aa;'>
                 <h4 style='margin: 0 0 15px 0; color: #0073aa;'>✅ Acciones Completadas:</h4>
