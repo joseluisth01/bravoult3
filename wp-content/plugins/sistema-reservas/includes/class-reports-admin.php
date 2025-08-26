@@ -82,195 +82,194 @@ class ReservasReportsAdmin
         add_action('wp_ajax_nopriv_get_available_schedules_for_pdf', array($this, 'get_available_schedules_for_pdf'));
 
         add_action('wp_ajax_update_reservation_data', array($this, 'update_reservation_data'));
-add_action('wp_ajax_nopriv_update_reservation_data', array($this, 'update_reservation_data'));
+        add_action('wp_ajax_nopriv_update_reservation_data', array($this, 'update_reservation_data'));
     }
 
-/**
- * Actualizar datos de reserva (solo super_admin) - VERSIÓN CORREGIDA
- */
-public function update_reservation_data()
-{
-    error_log('=== UPDATE_RESERVATION_DATA INICIADO ===');
-    
-    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-        wp_send_json_error('Error de seguridad');
-        return;
-    }
+    /**
+     * Actualizar datos de reserva (solo super_admin) - VERSIÓN CORREGIDA
+     */
+    public function update_reservation_data()
+    {
+        error_log('=== UPDATE_RESERVATION_DATA INICIADO ===');
 
-    if (!session_id()) {
-        session_start();
-    }
-
-    if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'super_admin') {
-        wp_send_json_error('Solo los Super Administradores pueden editar datos de reservas');
-        return;
-    }
-
-    global $wpdb;
-    $table_reservas = $wpdb->prefix . 'reservas_reservas';
-    $table_servicios = $wpdb->prefix . 'reservas_servicios';
-
-    $reserva_id = intval($_POST['reserva_id']);
-    $adultos = intval($_POST['adultos']);
-    $residentes = intval($_POST['residentes']);
-    $ninos_5_12 = intval($_POST['ninos_5_12']);
-    $ninos_menores = intval($_POST['ninos_menores']);
-    $precio_base = floatval($_POST['precio_base']);
-    $descuento_total = floatval($_POST['descuento_total']);
-    $precio_final = floatval($_POST['precio_final']);
-    $motivo_cambio = sanitize_text_field($_POST['motivo_cambio']);
-
-    error_log('Datos recibidos: ' . print_r($_POST, true));
-
-    // Validaciones
-    if (($ninos_5_12 + $ninos_menores) > 0 && ($adultos + $residentes) === 0) {
-        wp_send_json_error('Debe haber al menos un adulto si hay niños en la reserva');
-        return;
-    }
-
-    if (empty($motivo_cambio)) {
-        wp_send_json_error('Es obligatorio especificar el motivo del cambio');
-        return;
-    }
-
-    // Obtener datos actuales de la reserva
-    $reserva_actual = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM $table_reservas WHERE id = %d",
-        $reserva_id
-    ));
-
-    if (!$reserva_actual) {
-        error_log('Reserva no encontrada con ID: ' . $reserva_id);
-        wp_send_json_error('Reserva no encontrada');
-        return;
-    }
-
-    error_log('Reserva actual: ' . print_r($reserva_actual, true));
-
-    // Calcular nuevo total de personas con plaza
-    $nuevo_total_personas = $adultos + $residentes + $ninos_5_12;
-    $diferencia_personas = $nuevo_total_personas - $reserva_actual->total_personas;
-
-    error_log("Diferencia de personas: {$diferencia_personas} (nuevo: {$nuevo_total_personas}, anterior: {$reserva_actual->total_personas})");
-
-    // Iniciar transacción
-    $wpdb->query('START TRANSACTION');
-
-    try {
-        // 1. Verificar disponibilidad de plazas si se aumenta el número de personas
-        if ($diferencia_personas > 0) {
-            $plazas_disponibles = $wpdb->get_var($wpdb->prepare(
-                "SELECT plazas_disponibles FROM $table_servicios WHERE id = %d",
-                $reserva_actual->servicio_id
-            ));
-
-            error_log("Plazas disponibles en servicio {$reserva_actual->servicio_id}: {$plazas_disponibles}");
-
-            if ($plazas_disponibles < $diferencia_personas) {
-                throw new Exception("No hay suficientes plazas disponibles. Se necesitan {$diferencia_personas} plazas adicionales, pero solo hay {$plazas_disponibles} disponibles.");
-            }
+        if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+            wp_send_json_error('Error de seguridad');
+            return;
         }
 
-        // 2. Actualizar plazas en el servicio
-        if ($diferencia_personas != 0) {
-            $query_plazas = "UPDATE $table_servicios 
-                           SET plazas_disponibles = plazas_disponibles - %d 
-                           WHERE id = %d";
-            
-            error_log("Query plazas: " . $wpdb->prepare($query_plazas, $diferencia_personas, $reserva_actual->servicio_id));
-            
-            $resultado_plazas = $wpdb->query($wpdb->prepare($query_plazas, $diferencia_personas, $reserva_actual->servicio_id));
-
-            if ($resultado_plazas === false) {
-                error_log('Error SQL en actualización de plazas: ' . $wpdb->last_error);
-                throw new Exception('Error actualizando plazas del servicio: ' . $wpdb->last_error);
-            }
-            
-            error_log("Plazas actualizadas correctamente. Filas afectadas: {$resultado_plazas}");
+        if (!session_id()) {
+            session_start();
         }
 
-        // 3. Verificar qué columnas existen en la tabla antes de actualizar
-        $columns = $wpdb->get_col("DESCRIBE {$table_reservas}");
-        error_log('Columnas disponibles en tabla reservas: ' . print_r($columns, true));
-
-        // 4. Preparar datos de actualización - solo columnas que existen
-        $update_data = array(
-            'adultos' => $adultos,
-            'residentes' => $residentes,
-            'ninos_5_12' => $ninos_5_12,
-            'ninos_menores' => $ninos_menores,
-            'total_personas' => $nuevo_total_personas,
-            'precio_base' => $precio_base,
-            'descuento_total' => $descuento_total,
-            'precio_final' => $precio_final,
-            'updated_at' => current_time('mysql')
-        );
-
-        // Añadir motivo solo si la columna existe
-        if (in_array('motivo_ultima_modificacion', $columns)) {
-            $update_data['motivo_ultima_modificacion'] = $motivo_cambio;
+        if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'super_admin') {
+            wp_send_json_error('Solo los Super Administradores pueden editar datos de reservas');
+            return;
         }
 
-        error_log('Datos a actualizar: ' . print_r($update_data, true));
-        error_log('WHERE condition: id = ' . $reserva_id);
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        $table_servicios = $wpdb->prefix . 'reservas_servicios';
 
-        // 5. Actualizar datos de la reserva
-        $resultado_reserva = $wpdb->update(
-            $table_reservas,
-            $update_data,
-            array('id' => $reserva_id),
-            array('%d', '%d', '%d', '%d', '%d', '%f', '%f', '%f', '%s'), // Formatos para los valores
-            array('%d') // Formato para WHERE
-        );
+        $reserva_id = intval($_POST['reserva_id']);
+        $adultos = intval($_POST['adultos']);
+        $residentes = intval($_POST['residentes']);
+        $ninos_5_12 = intval($_POST['ninos_5_12']);
+        $ninos_menores = intval($_POST['ninos_menores']);
+        $precio_base = floatval($_POST['precio_base']);
+        $descuento_total = floatval($_POST['descuento_total']);
+        $precio_final = floatval($_POST['precio_final']);
+        $motivo_cambio = sanitize_text_field($_POST['motivo_cambio']);
 
-        error_log('Resultado de wpdb->update: ' . var_export($resultado_reserva, true));
-        
-        if ($wpdb->last_error) {
-            error_log('Error SQL en actualización de reserva: ' . $wpdb->last_error);
+        error_log('Datos recibidos: ' . print_r($_POST, true));
+
+        // Validaciones
+        if (($ninos_5_12 + $ninos_menores) > 0 && ($adultos + $residentes) === 0) {
+            wp_send_json_error('Debe haber al menos un adulto si hay niños en la reserva');
+            return;
         }
 
-        if ($resultado_reserva === false) {
-            throw new Exception('Error actualizando los datos de la reserva: ' . ($wpdb->last_error ?: 'Error desconocido'));
+        if (empty($motivo_cambio)) {
+            wp_send_json_error('Es obligatorio especificar el motivo del cambio');
+            return;
         }
 
-        // 6. Registrar el cambio en un log
-        $admin_user = $_SESSION['reservas_user']['username'] ?? 'super_admin';
-        error_log("RESERVA EDITADA - ID: {$reserva_id} - Admin: {$admin_user} - Motivo: {$motivo_cambio}");
-
-        // 7. Enviar email de confirmación con los nuevos datos
-        $reserva_actualizada = $wpdb->get_row($wpdb->prepare(
+        // Obtener datos actuales de la reserva
+        $reserva_actual = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM $table_reservas WHERE id = %d",
             $reserva_id
         ));
 
-        if ($reserva_actualizada && $reserva_actualizada->email) {
-            if (!class_exists('ReservasEmailService')) {
-                require_once RESERVAS_PLUGIN_PATH . 'includes/class-email-service.php';
-            }
-
-            $result = ReservasEmailService::send_customer_confirmation((array) $reserva_actualizada);
-            
-            if (!$result['success']) {
-                error_log('Error enviando email de confirmación después de editar reserva: ' . $result['message']);
-            } else {
-                error_log('Email de confirmación enviado correctamente');
-            }
+        if (!$reserva_actual) {
+            error_log('Reserva no encontrada con ID: ' . $reserva_id);
+            wp_send_json_error('Reserva no encontrada');
+            return;
         }
 
-        // Confirmar transacción
-        $wpdb->query('COMMIT');
-        error_log('Transacción confirmada exitosamente');
+        error_log('Reserva actual: ' . print_r($reserva_actual, true));
 
-        wp_send_json_success('Reserva actualizada correctamente. Se ha enviado una nueva confirmación al cliente.');
+        // Calcular nuevo total de personas con plaza
+        $nuevo_total_personas = $adultos + $residentes + $ninos_5_12;
+        $diferencia_personas = $nuevo_total_personas - $reserva_actual->total_personas;
 
-    } catch (Exception $e) {
-        // Rollback en caso de error
-        $wpdb->query('ROLLBACK');
-        error_log('Exception en update_reservation_data: ' . $e->getMessage());
-        error_log('Stack trace: ' . $e->getTraceAsString());
-        wp_send_json_error('Error actualizando la reserva: ' . $e->getMessage());
+        error_log("Diferencia de personas: {$diferencia_personas} (nuevo: {$nuevo_total_personas}, anterior: {$reserva_actual->total_personas})");
+
+        // Iniciar transacción
+        $wpdb->query('START TRANSACTION');
+
+        try {
+            // 1. Verificar disponibilidad de plazas si se aumenta el número de personas
+            if ($diferencia_personas > 0) {
+                $plazas_disponibles = $wpdb->get_var($wpdb->prepare(
+                    "SELECT plazas_disponibles FROM $table_servicios WHERE id = %d",
+                    $reserva_actual->servicio_id
+                ));
+
+                error_log("Plazas disponibles en servicio {$reserva_actual->servicio_id}: {$plazas_disponibles}");
+
+                if ($plazas_disponibles < $diferencia_personas) {
+                    throw new Exception("No hay suficientes plazas disponibles. Se necesitan {$diferencia_personas} plazas adicionales, pero solo hay {$plazas_disponibles} disponibles.");
+                }
+            }
+
+            // 2. Actualizar plazas en el servicio
+            if ($diferencia_personas != 0) {
+                $query_plazas = "UPDATE $table_servicios 
+                           SET plazas_disponibles = plazas_disponibles - %d 
+                           WHERE id = %d";
+
+                error_log("Query plazas: " . $wpdb->prepare($query_plazas, $diferencia_personas, $reserva_actual->servicio_id));
+
+                $resultado_plazas = $wpdb->query($wpdb->prepare($query_plazas, $diferencia_personas, $reserva_actual->servicio_id));
+
+                if ($resultado_plazas === false) {
+                    error_log('Error SQL en actualización de plazas: ' . $wpdb->last_error);
+                    throw new Exception('Error actualizando plazas del servicio: ' . $wpdb->last_error);
+                }
+
+                error_log("Plazas actualizadas correctamente. Filas afectadas: {$resultado_plazas}");
+            }
+
+            // 3. Verificar qué columnas existen en la tabla antes de actualizar
+            $columns = $wpdb->get_col("DESCRIBE {$table_reservas}");
+            error_log('Columnas disponibles en tabla reservas: ' . print_r($columns, true));
+
+            // 4. Preparar datos de actualización - solo columnas que existen
+            $update_data = array(
+                'adultos' => $adultos,
+                'residentes' => $residentes,
+                'ninos_5_12' => $ninos_5_12,
+                'ninos_menores' => $ninos_menores,
+                'total_personas' => $nuevo_total_personas,
+                'precio_base' => $precio_base,
+                'descuento_total' => $descuento_total,
+                'precio_final' => $precio_final,
+                'updated_at' => current_time('mysql')
+            );
+
+            // Añadir motivo solo si la columna existe
+            if (in_array('motivo_ultima_modificacion', $columns)) {
+                $update_data['motivo_ultima_modificacion'] = $motivo_cambio;
+            }
+
+            error_log('Datos a actualizar: ' . print_r($update_data, true));
+            error_log('WHERE condition: id = ' . $reserva_id);
+
+            // 5. Actualizar datos de la reserva
+            $resultado_reserva = $wpdb->update(
+                $table_reservas,
+                $update_data,
+                array('id' => $reserva_id),
+                array('%d', '%d', '%d', '%d', '%d', '%f', '%f', '%f', '%s'), // Formatos para los valores
+                array('%d') // Formato para WHERE
+            );
+
+            error_log('Resultado de wpdb->update: ' . var_export($resultado_reserva, true));
+
+            if ($wpdb->last_error) {
+                error_log('Error SQL en actualización de reserva: ' . $wpdb->last_error);
+            }
+
+            if ($resultado_reserva === false) {
+                throw new Exception('Error actualizando los datos de la reserva: ' . ($wpdb->last_error ?: 'Error desconocido'));
+            }
+
+            // 6. Registrar el cambio en un log
+            $admin_user = $_SESSION['reservas_user']['username'] ?? 'super_admin';
+            error_log("RESERVA EDITADA - ID: {$reserva_id} - Admin: {$admin_user} - Motivo: {$motivo_cambio}");
+
+            // 7. Enviar email de confirmación con los nuevos datos
+            $reserva_actualizada = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM $table_reservas WHERE id = %d",
+                $reserva_id
+            ));
+
+            if ($reserva_actualizada && $reserva_actualizada->email) {
+                if (!class_exists('ReservasEmailService')) {
+                    require_once RESERVAS_PLUGIN_PATH . 'includes/class-email-service.php';
+                }
+
+                $result = ReservasEmailService::send_customer_confirmation((array) $reserva_actualizada);
+
+                if (!$result['success']) {
+                    error_log('Error enviando email de confirmación después de editar reserva: ' . $result['message']);
+                } else {
+                    error_log('Email de confirmación enviado correctamente');
+                }
+            }
+
+            // Confirmar transacción
+            $wpdb->query('COMMIT');
+            error_log('Transacción confirmada exitosamente');
+
+            wp_send_json_success('Reserva actualizada correctamente. Se ha enviado una nueva confirmación al cliente.');
+        } catch (Exception $e) {
+            // Rollback en caso de error
+            $wpdb->query('ROLLBACK');
+            error_log('Exception en update_reservation_data: ' . $e->getMessage());
+            error_log('Stack trace: ' . $e->getTraceAsString());
+            wp_send_json_error('Error actualizando la reserva: ' . $e->getMessage());
+        }
     }
-}
 
     /**
      * Obtener informe de reservas por fechas - CON FILTROS MEJORADOS Y INGRESOS CORREGIDOS
@@ -587,158 +586,111 @@ public function update_reservation_data()
                 ));
             }
 
-            // ✅ ESTADÍSTICAS POR AGENCIAS (SI NO SE FILTRA POR UNA ESPECÍFICA) - CON FILTRO DE HORARIOS
-            $stats_por_agencias = null;
-            if ($agency_filter === 'todas') {
-                $agency_base_conditions = array();
-                $agency_base_params = array();
+            // ✅ ESTADÍSTICAS POR AGENCIAS (SI NO SE FILTRA POR UNA ESPECÍFICA) - CON FILTRO DE HORARIOS CORREGIDO
+$stats_por_agencias = null;
+if ($agency_filter === 'todas') {
+    // ✅ USAR EXACTAMENTE LAS MISMAS CONDICIONES QUE PARA LAS ESTADÍSTICAS GENERALES
+    $agency_base_conditions = $stats_base_conditions; // ✅ REUTILIZAR CONDICIONES BASE
+    $agency_base_params = $stats_base_params; // ✅ REUTILIZAR PARÁMETROS BASE
 
-                if ($tipo_fecha === 'compra') {
-                    $agency_base_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
-                } else {
-                    $agency_base_conditions[] = "r.fecha BETWEEN %s AND %s";
-                }
-                $agency_base_params[] = $fecha_inicio;
-                $agency_base_params[] = $fecha_fin;
+    // Conteos por agencia (respetan filtro de estado)
+    $agency_count_conditions = $agency_base_conditions;
+    $agency_count_params = $agency_base_params;
 
-                // ✅ APLICAR FILTRO DE HORARIOS PARA AGENCIAS TAMBIÉN
-                if (!empty($selected_schedules)) {
-                    $selected_schedules_json = $selected_schedules;
-                    if (strpos($selected_schedules_json, '\\') !== false) {
-                        $selected_schedules_json = stripslashes($selected_schedules_json);
-                    }
+    switch ($estado_filtro) {
+        case 'confirmadas':
+            $agency_count_conditions[] = "r.estado = 'confirmada'";
+            break;
+        case 'canceladas':
+            $agency_count_conditions[] = "r.estado = 'cancelada'";
+            break;
+        case 'todas':
+            // No añadir condición
+            break;
+    }
 
-                    $selected_schedules_array = json_decode($selected_schedules_json, true);
+    // Ingresos por agencia (siempre solo confirmadas)
+    $agency_revenue_conditions = $agency_base_conditions;
+    $agency_revenue_conditions[] = "r.estado = 'confirmada'";
+    $agency_revenue_params = $agency_base_params;
 
-                    if (is_array($selected_schedules_array) && !empty($selected_schedules_array)) {
-                        $schedule_conditions = array();
+    $agency_count_where = 'WHERE ' . implode(' AND ', $agency_count_conditions);
+    $agency_revenue_where = 'WHERE ' . implode(' AND ', $agency_revenue_conditions);
 
-                        foreach ($selected_schedules_array as $schedule) {
-                            if (!empty($schedule['hora'])) {
-                                $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
+    // ✅ OBTENER CONTEOS POR AGENCIA - CON SERVICIOS Y FILTROS APLICADOS
+    $agency_count_stats = $wpdb->get_results($wpdb->prepare(
+        "SELECT 
+            r.agency_id,
+            COUNT(*) as total_reservas,
+            SUM(r.total_personas) as total_personas,
+            SUM(r.adultos) as total_adultos,
+            SUM(r.residentes) as total_residentes,
+            SUM(r.ninos_5_12) as total_ninos_5_12,
+            SUM(r.ninos_menores) as total_ninos_menores
+        FROM $table_reservas r
+        INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+        $agency_count_where
+        GROUP BY r.agency_id",
+        ...$agency_count_params
+    ));
 
-                                if (
-                                    !empty($schedule['hora_vuelta']) &&
-                                    $schedule['hora_vuelta'] !== 'null' &&
-                                    $schedule['hora_vuelta'] !== '' &&
-                                    $schedule['hora_vuelta'] !== '00:00:00'
-                                ) {
-                                    $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
-                                    $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
-                                    $agency_base_params[] = $hora_normalizada;
-                                    $agency_base_params[] = $vuelta_normalizada;
-                                } else {
-                                    $schedule_conditions[] = "(s.hora = %s)";
-                                    $agency_base_params[] = $hora_normalizada;
-                                }
-                            }
-                        }
+    // ✅ OBTENER INGRESOS POR AGENCIA - CON SERVICIOS Y FILTROS APLICADOS
+    $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
+        "SELECT 
+            r.agency_id,
+            SUM(r.precio_final) as ingresos_totales
+        FROM $table_reservas r
+        INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+        $agency_revenue_where
+        GROUP BY r.agency_id",
+        ...$agency_revenue_params
+    ));
 
-                        if (!empty($schedule_conditions)) {
-                            $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
-                            $agency_base_conditions[] = $horarios_where;
-                        }
-                    }
-                }
+    // Combinar resultados
+    $stats_por_agencias = array();
+    $revenue_by_agency = array();
 
-                // Conteos por agencia (respetan filtro de estado)
-                $agency_count_conditions = $agency_base_conditions;
-                $agency_count_params = $agency_base_params;
+    // Indexar ingresos por agency_id
+    foreach ($agency_revenue_stats as $revenue) {
+        $revenue_by_agency[$revenue->agency_id ?? 'null'] = $revenue->ingresos_totales;
+    }
 
-                switch ($estado_filtro) {
-                    case 'confirmadas':
-                        $agency_count_conditions[] = "r.estado = 'confirmada'";
-                        break;
-                    case 'canceladas':
-                        $agency_count_conditions[] = "r.estado = 'cancelada'";
-                        break;
-                    case 'todas':
-                        // No añadir condición
-                        break;
-                }
+    // Crear estadísticas combinadas
+    foreach ($agency_count_stats as $count) {
+        $agency_id = $count->agency_id;
+        $agency_key = $agency_id ?? 'null';
 
-                // Ingresos por agencia (siempre solo confirmadas)
-                $agency_revenue_conditions = $agency_base_conditions;
-                $agency_revenue_conditions[] = "r.estado = 'confirmada'";
-                $agency_revenue_params = $agency_base_params;
+        // Obtener nombre de agencia
+        if ($agency_id) {
+            $agency_name = $wpdb->get_var($wpdb->prepare(
+                "SELECT agency_name FROM $table_agencies WHERE id = %d",
+                $agency_id
+            ));
+        } else {
+            $agency_name = 'Sin Agencia';
+        }
 
-                $agency_count_where = 'WHERE ' . implode(' AND ', $agency_count_conditions);
-                $agency_revenue_where = 'WHERE ' . implode(' AND ', $agency_revenue_conditions);
+        $stats_por_agencias[] = (object) array(
+            'agency_name' => $agency_name,
+            'agency_id' => $agency_id,
+            'total_reservas' => (int) $count->total_reservas,
+            'total_personas' => (int) $count->total_personas,
+            'ingresos_total' => (float) ($revenue_by_agency[$agency_key] ?? 0),
+            'total_adultos' => isset($count->total_adultos) ? (int) $count->total_adultos : 0,
+            'total_residentes' => isset($count->total_residentes) ? (int) $count->total_residentes : 0,
+            'total_ninos_5_12' => isset($count->total_ninos_5_12) ? (int) $count->total_ninos_5_12 : 0,
+            'total_ninos_menores' => isset($count->total_ninos_menores) ? (int) $count->total_ninos_menores : 0
+        );
+    }
 
-                // Obtener conteos por agencia - CON SERVICIOS
-                $agency_count_stats = $wpdb->get_results($wpdb->prepare(
-                    "SELECT 
-                    r.agency_id,
-                    COUNT(*) as total_reservas,
-                    SUM(r.total_personas) as total_personas,
-                    SUM(r.adultos) as total_adultos,
-                    SUM(r.residentes) as total_residentes,
-                    SUM(r.ninos_5_12) as total_ninos_5_12,
-                    SUM(r.ninos_menores) as total_ninos_menores
-                 FROM $table_reservas r
-                 INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-                 $agency_count_where
-                 GROUP BY r.agency_id",
-                    ...$agency_count_params
-                ));
+    // Ordenar por total de reservas
+    usort($stats_por_agencias, function ($a, $b) {
+        return $b->total_reservas - $a->total_reservas;
+    });
 
-                // Obtener ingresos por agencia - CON SERVICIOS
-                $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
-                    "SELECT 
-        r.agency_id,
-        SUM(r.precio_final) as ingresos_totales
-     FROM $table_reservas r
-     INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-     $agency_revenue_where
-     GROUP BY r.agency_id",
-                    ...$agency_revenue_params
-                ));
-
-                // Combinar resultados
-                $stats_por_agencias = array();
-                $revenue_by_agency = array();
-
-                // Indexar ingresos por agency_id
-                foreach ($agency_revenue_stats as $revenue) {
-                    $revenue_by_agency[$revenue->agency_id ?? 'null'] = $revenue->ingresos_totales;
-                }
-
-                // Crear estadísticas combinadas
-                foreach ($agency_count_stats as $count) {
-                    $agency_id = $count->agency_id;
-                    $agency_key = $agency_id ?? 'null';
-
-                    // Obtener nombre de agencia
-                    if ($agency_id) {
-                        $agency_name = $wpdb->get_var($wpdb->prepare(
-                            "SELECT agency_name FROM $table_agencies WHERE id = %d",
-                            $agency_id
-                        ));
-                    } else {
-                        $agency_name = 'Sin Agencia';
-                    }
-
-                    $stats_por_agencias[] = (object) array(
-                        'agency_name' => $agency_name,
-                        'agency_id' => $agency_id,
-                        'total_reservas' => (int) $count->total_reservas,
-                        'total_personas' => (int) $count->total_personas,
-                        'ingresos_total' => (float) ($revenue_by_agency[$agency_key] ?? 0),
-                        'total_adultos' => isset($count->total_adultos) ? (int) $count->total_adultos : 0,
-                        'total_residentes' => isset($count->total_residentes) ? (int) $count->total_residentes : 0,
-                        'total_ninos_5_12' => isset($count->total_ninos_5_12) ? (int) $count->total_ninos_5_12 : 0,
-                        'total_ninos_menores' => isset($count->total_ninos_menores) ? (int) $count->total_ninos_menores : 0
-                    );
-                }
-
-                // Ordenar por total de reservas
-                usort($stats_por_agencias, function ($a, $b) {
-                    return $b->total_reservas - $a->total_reservas;
-                });
-
-                // Limitar a 10 resultados
-                $stats_por_agencias = array_slice($stats_por_agencias, 0, 10);
-            }
+    // Limitar a 10 resultados
+    $stats_por_agencias = array_slice($stats_por_agencias, 0, 10);
+}
 
             $response_data = array(
                 'reservas' => $reservas,
