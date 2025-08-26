@@ -10305,7 +10305,6 @@ function renderAgencySearchResults(data) {
                        <th>Email</th>
                        <th>Teléfono</th>
                        <th>Personas</th>
-                       <th>Total</th>
                        <th>Acciones</th>
                    </tr>
                </thead>
@@ -10324,7 +10323,6 @@ function renderAgencySearchResults(data) {
                    <td>${reserva.email}</td>
                    <td>${reserva.telefono}</td>
                    <td title="Adultos: ${reserva.adultos}, Residentes: ${reserva.residentes}, Niños 5-12: ${reserva.ninos_5_12}, Menores: ${reserva.ninos_menores}">${personasDetalle}</td>
-                   <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
                    <td>
     <button class="btn-small btn-info" onclick="showAgencyReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
     <button class="btn-small btn-success" onclick="downloadAgencyTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>

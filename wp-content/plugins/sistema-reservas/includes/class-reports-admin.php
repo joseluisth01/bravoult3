@@ -510,7 +510,7 @@ $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
 
                 // Indexar ingresos por agency_id
                 foreach ($agency_revenue_stats as $revenue) {
-                    $revenue_by_agency[$revenue->agency_id ?? 'null'] = $revenue->ingresos_total;
+                    $revenue_by_agency[$revenue->agency_id ?? 'null'] = $revenue->ingresos_totales;
                 }
 
                 // Crear estadísticas combinadas
