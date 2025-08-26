@@ -3651,6 +3651,16 @@ function renderReservationDetails(reserva) {
         `;
     }
 
+    // ✅ VERIFICAR SI ES SUPER_ADMIN PARA MOSTRAR BOTÓN EDITAR
+    const currentUser = window.reservasUser || {};
+    const isSuperAdmin = currentUser.role === 'super_admin';
+    
+    // ✅ BOTÓN EDITAR RESERVA SOLO PARA SUPER_ADMIN
+    let editButton = '';
+    if (isSuperAdmin && reserva.estado !== 'cancelada') {
+        editButton = `<button class="btn-warning" onclick="showEditReservationDataModal(${reserva.id})">✏️ Editar Reserva</button>`;
+    }
+
     const detailsHtml = `
         <div class="reservation-details">
             <div class="details-grid">
@@ -3680,14 +3690,13 @@ function renderReservationDetails(reserva) {
                     <p><strong>Total personas con plaza:</strong> ${reserva.total_personas}</p>
                 </div>
                 
-                
-<div class="detail-section">
-    <h4>💰 Información de Precios</h4>
-    <p><strong>Precio base:</strong> ${parseFloat(reserva.precio_base).toFixed(2)}€</p>
-    <p><strong>Descuento total:</strong> ${parseFloat(reserva.descuento_total).toFixed(2)}€</p>
-    <p><strong>Precio final:</strong> <span class="price-final">${parseFloat(reserva.precio_final).toFixed(2)}€</span></p>
-    <p><strong>Método de pago:</strong> ${reserva.metodo_pago}</p>
-</div>
+                <div class="detail-section">
+                    <h4>💰 Información de Precios</h4>
+                    <p><strong>Precio base:</strong> ${parseFloat(reserva.precio_base).toFixed(2)}€</p>
+                    <p><strong>Descuento total:</strong> ${parseFloat(reserva.descuento_total).toFixed(2)}€</p>
+                    <p><strong>Precio final:</strong> <span class="price-final">${parseFloat(reserva.precio_final).toFixed(2)}€</span></p>
+                    <p><strong>Método de pago:</strong> ${reserva.metodo_pago}</p>
+                </div>
             </div>
             
             ${descuentoInfo}
@@ -3695,6 +3704,7 @@ function renderReservationDetails(reserva) {
             <div class="detail-actions">
                 <button class="btn-primary" onclick="showEditEmailModal(${reserva.id}, '${reserva.email}')">✏️ Editar Email</button>
                 <button class="btn-secondary" onclick="resendConfirmationEmail(${reserva.id})">📧 Reenviar Confirmación</button>
+                ${editButton}
             </div>
         </div>
     `;
@@ -3702,6 +3712,356 @@ function renderReservationDetails(reserva) {
     document.getElementById('reservationModalTitle').textContent = `Detalles de Reserva - ${reserva.localizador}`;
     document.getElementById('reservation-details-content').innerHTML = detailsHtml;
 }
+
+
+/**
+ * Mostrar modal para editar datos de la reserva (solo super_admin)
+ */
+function showEditReservationDataModal(reservaId) {
+    // Crear modal si no existe
+    if (!document.getElementById('editReservationDataModal')) {
+        createEditReservationDataModal();
+    }
+
+    // Cargar datos actuales de la reserva
+    loadReservationDataForEdit(reservaId);
+    document.getElementById('editReservationDataModal').style.display = 'block';
+}
+
+/**
+ * Crear modal de edición de datos de reserva
+ */
+function createEditReservationDataModal() {
+    const modalHtml = `
+        <div id="editReservationDataModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 600px;">
+                <span class="close" onclick="closeEditReservationDataModal()">&times;</span>
+                <h3 style="color: #0073aa;">✏️ Editar Datos de Reserva</h3>
+                
+                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ffc107;">
+                    <p style="margin: 0; color: #856404; font-weight: bold;">
+                        ⚠️ Solo Super Administradores pueden editar estos datos
+                    </p>
+                    <p style="margin: 5px 0 0 0; color: #856404; font-size: 14px;">
+                        Los cambios se aplicarán inmediatamente y se registrarán en el historial.
+                    </p>
+                </div>
+                
+                <form id="editReservationDataForm">
+                    <input type="hidden" id="edit-data-reserva-id">
+                    
+                    <!-- Sección de Personas -->
+                    <div class="edit-section">
+                        <h4>👥 Distribución de Personas</h4>
+                        <div class="persons-grid">
+                            <div class="person-field">
+                                <label for="edit-adultos">Adultos:</label>
+                                <input type="number" id="edit-adultos" name="adultos" min="0" max="50" required>
+                            </div>
+                            <div class="person-field">
+                                <label for="edit-residentes">Residentes:</label>
+                                <input type="number" id="edit-residentes" name="residentes" min="0" max="50" required>
+                            </div>
+                            <div class="person-field">
+                                <label for="edit-ninos-5-12">Niños (5-12 años):</label>
+                                <input type="number" id="edit-ninos-5-12" name="ninos_5_12" min="0" max="50" required>
+                            </div>
+                            <div class="person-field">
+                                <label for="edit-ninos-menores">Niños menores (gratis):</label>
+                                <input type="number" id="edit-ninos-menores" name="ninos_menores" min="0" max="50" required>
+                            </div>
+                        </div>
+                        
+                        <div class="total-persons">
+                            <strong>Total personas con plaza: <span id="edit-total-personas">0</span></strong>
+                        </div>
+                    </div>
+                    
+                    <!-- Sección de Precios -->
+                    <div class="edit-section">
+                        <h4>💰 Información de Precios</h4>
+                        <div class="prices-grid">
+                            <div class="price-field">
+                                <label for="edit-precio-base">Precio Base (€):</label>
+                                <input type="number" id="edit-precio-base" name="precio_base" step="0.01" min="0" required readonly>
+                            </div>
+                            <div class="price-field">
+                                <label for="edit-descuento-total">Descuento Total (€):</label>
+                                <input type="number" id="edit-descuento-total" name="descuento_total" step="0.01" min="0" required>
+                            </div>
+                            <div class="price-field">
+                                <label for="edit-precio-final">Precio Final (€):</label>
+                                <input type="number" id="edit-precio-final" name="precio_final" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Motivo del cambio -->
+                    <div class="edit-section">
+                        <h4>📝 Motivo del Cambio</h4>
+                        <div class="form-group">
+                            <label for="edit-motivo-cambio">Motivo de la modificación:</label>
+                            <textarea id="edit-motivo-cambio" name="motivo_cambio" rows="3" 
+                                      placeholder="Explica el motivo de estos cambios..." required
+                                      style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                        <button type="button" class="btn-secondary" onclick="closeEditReservationDataModal()">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn-primary">
+                            ✅ Guardar Cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <style>
+        .edit-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+        
+        .edit-section h4 {
+            margin: 0 0 15px 0;
+            color: #0073aa;
+            border-bottom: 1px solid #0073aa;
+            padding-bottom: 5px;
+        }
+        
+        .persons-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .prices-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .person-field, .price-field {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .person-field label, .price-field label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .person-field input, .price-field input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .person-field input:focus, .price-field input:focus {
+            outline: none;
+            border-color: #0073aa;
+            box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.1);
+        }
+        
+        .total-persons {
+            text-align: center;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 4px;
+            color: #1976d2;
+        }
+        
+        @media (max-width: 768px) {
+            .persons-grid, .prices-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        </style>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Añadir eventos
+    document.getElementById('editReservationDataForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        processReservationDataEdit();
+    });
+
+    // Eventos para actualizar totales automáticamente
+    ['edit-adultos', 'edit-residentes', 'edit-ninos-5-12', 'edit-ninos-menores'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updatePersonsTotal);
+    });
+
+    // Eventos para actualizar precio final automáticamente
+    document.getElementById('edit-descuento-total').addEventListener('input', updateFinalPrice);
+}
+
+/**
+ * Cargar datos de la reserva para edición
+ */
+function loadReservationDataForEdit(reservaId) {
+    document.getElementById('edit-data-reserva-id').value = reservaId;
+    
+    const formData = new FormData();
+    formData.append('action', 'get_reservation_details');
+    formData.append('reserva_id', reservaId);
+    formData.append('nonce', reservasAjax.nonce);
+
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const reserva = data.data;
+            
+            // Llenar campos de personas
+            document.getElementById('edit-adultos').value = reserva.adultos || 0;
+            document.getElementById('edit-residentes').value = reserva.residentes || 0;
+            document.getElementById('edit-ninos-5-12').value = reserva.ninos_5_12 || 0;
+            document.getElementById('edit-ninos-menores').value = reserva.ninos_menores || 0;
+            
+            // Llenar campos de precios
+            document.getElementById('edit-precio-base').value = parseFloat(reserva.precio_base || 0).toFixed(2);
+            document.getElementById('edit-descuento-total').value = parseFloat(reserva.descuento_total || 0).toFixed(2);
+            document.getElementById('edit-precio-final').value = parseFloat(reserva.precio_final || 0).toFixed(2);
+            
+            // Actualizar totales
+            updatePersonsTotal();
+        } else {
+            alert('Error cargando datos de la reserva: ' + data.data);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error de conexión');
+    });
+}
+
+/**
+ * Actualizar total de personas
+ */
+function updatePersonsTotal() {
+    const adultos = parseInt(document.getElementById('edit-adultos').value) || 0;
+    const residentes = parseInt(document.getElementById('edit-residentes').value) || 0;
+    const ninos512 = parseInt(document.getElementById('edit-ninos-5-12').value) || 0;
+    const ninosMenores = parseInt(document.getElementById('edit-ninos-menores').value) || 0;
+    
+    const total = adultos + residentes + ninos512; // Los menores no ocupan plaza
+    document.getElementById('edit-total-personas').textContent = total;
+    
+    // Validar que si hay niños, debe haber adultos
+    if ((ninos512 > 0 || ninosMenores > 0) && (adultos + residentes) === 0) {
+        alert('Debe haber al menos un adulto si hay niños en la reserva');
+        document.getElementById('edit-ninos-5-12').value = 0;
+        document.getElementById('edit-ninos-menores').value = 0;
+        updatePersonsTotal();
+    }
+}
+
+/**
+ * Actualizar precio final automáticamente
+ */
+function updateFinalPrice() {
+    const precioBase = parseFloat(document.getElementById('edit-precio-base').value) || 0;
+    const descuentoTotal = parseFloat(document.getElementById('edit-descuento-total').value) || 0;
+    const precioFinal = Math.max(0, precioBase - descuentoTotal);
+    
+    document.getElementById('edit-precio-final').value = precioFinal.toFixed(2);
+}
+
+/**
+ * Procesar edición de datos de reserva
+ */
+function processReservationDataEdit() {
+    const adultos = parseInt(document.getElementById('edit-adultos').value) || 0;
+    const residentes = parseInt(document.getElementById('edit-residentes').value) || 0;
+    const ninos512 = parseInt(document.getElementById('edit-ninos-5-12').value) || 0;
+    const ninosMenores = parseInt(document.getElementById('edit-ninos-menores').value) || 0;
+    const motivoCambio = document.getElementById('edit-motivo-cambio').value.trim();
+    
+    // Validaciones
+    if ((ninos512 + ninosMenores) > 0 && (adultos + residentes) === 0) {
+        alert('Debe haber al menos un adulto si hay niños en la reserva');
+        return;
+    }
+    
+    if (!motivoCambio) {
+        alert('Es obligatorio especificar el motivo del cambio');
+        return;
+    }
+    
+    if (!confirm('¿Estás seguro de que quieres modificar estos datos de la reserva?\n\nEsta acción se registrará en el historial y se enviará una nueva confirmación al cliente.')) {
+        return;
+    }
+    
+    // Deshabilitar botón
+    const submitBtn = document.querySelector('#editReservationDataForm button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Guardando...';
+    
+    const formData = new FormData(document.getElementById('editReservationDataForm'));
+    formData.append('action', 'update_reservation_data');
+    formData.append('reserva_id', document.getElementById('edit-data-reserva-id').value);
+    formData.append('nonce', reservasAjax.nonce);
+    
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Rehabilitar botón
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+        
+        if (data.success) {
+            alert('✅ ' + data.data);
+            closeEditReservationDataModal();
+            
+            // Recargar lista y cerrar modal de detalles
+            closeReservationDetailsModal();
+            const activeTab = document.querySelector('.tab-btn.active');
+            if (activeTab && activeTab.textContent.includes('Reservas')) {
+                loadReservationsByDateWithFilters();
+            } else if (activeTab && activeTab.textContent.includes('Buscar')) {
+                searchReservations();
+            }
+        } else {
+            alert('❌ Error: ' + data.data);
+        }
+    })
+    .catch(error => {
+        // Rehabilitar botón
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+        
+        console.error('Error:', error);
+        alert('❌ Error de conexión al actualizar la reserva');
+    });
+}
+
+/**
+ * Cerrar modal de edición de datos
+ */
+function closeEditReservationDataModal() {
+    document.getElementById('editReservationDataModal').style.display = 'none';
+}
+
+// Exponer funciones globalmente
+window.showEditReservationDataModal = showEditReservationDataModal;
+window.closeEditReservationDataModal = closeEditReservationDataModal;
 
 function showEditEmailModal(reservaId, currentEmail) {
     document.getElementById('edit-reserva-id').value = reservaId;

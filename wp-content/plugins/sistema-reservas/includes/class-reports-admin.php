@@ -80,7 +80,197 @@ class ReservasReportsAdmin
 
         add_action('wp_ajax_get_available_schedules_for_pdf', array($this, 'get_available_schedules_for_pdf'));
         add_action('wp_ajax_nopriv_get_available_schedules_for_pdf', array($this, 'get_available_schedules_for_pdf'));
+
+        add_action('wp_ajax_update_reservation_data', array($this, 'update_reservation_data'));
+add_action('wp_ajax_nopriv_update_reservation_data', array($this, 'update_reservation_data'));
     }
+
+/**
+ * Actualizar datos de reserva (solo super_admin) - VERSIÓN CORREGIDA
+ */
+public function update_reservation_data()
+{
+    error_log('=== UPDATE_RESERVATION_DATA INICIADO ===');
+    
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+
+    if (!session_id()) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'super_admin') {
+        wp_send_json_error('Solo los Super Administradores pueden editar datos de reservas');
+        return;
+    }
+
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    $table_servicios = $wpdb->prefix . 'reservas_servicios';
+
+    $reserva_id = intval($_POST['reserva_id']);
+    $adultos = intval($_POST['adultos']);
+    $residentes = intval($_POST['residentes']);
+    $ninos_5_12 = intval($_POST['ninos_5_12']);
+    $ninos_menores = intval($_POST['ninos_menores']);
+    $precio_base = floatval($_POST['precio_base']);
+    $descuento_total = floatval($_POST['descuento_total']);
+    $precio_final = floatval($_POST['precio_final']);
+    $motivo_cambio = sanitize_text_field($_POST['motivo_cambio']);
+
+    error_log('Datos recibidos: ' . print_r($_POST, true));
+
+    // Validaciones
+    if (($ninos_5_12 + $ninos_menores) > 0 && ($adultos + $residentes) === 0) {
+        wp_send_json_error('Debe haber al menos un adulto si hay niños en la reserva');
+        return;
+    }
+
+    if (empty($motivo_cambio)) {
+        wp_send_json_error('Es obligatorio especificar el motivo del cambio');
+        return;
+    }
+
+    // Obtener datos actuales de la reserva
+    $reserva_actual = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_reservas WHERE id = %d",
+        $reserva_id
+    ));
+
+    if (!$reserva_actual) {
+        error_log('Reserva no encontrada con ID: ' . $reserva_id);
+        wp_send_json_error('Reserva no encontrada');
+        return;
+    }
+
+    error_log('Reserva actual: ' . print_r($reserva_actual, true));
+
+    // Calcular nuevo total de personas con plaza
+    $nuevo_total_personas = $adultos + $residentes + $ninos_5_12;
+    $diferencia_personas = $nuevo_total_personas - $reserva_actual->total_personas;
+
+    error_log("Diferencia de personas: {$diferencia_personas} (nuevo: {$nuevo_total_personas}, anterior: {$reserva_actual->total_personas})");
+
+    // Iniciar transacción
+    $wpdb->query('START TRANSACTION');
+
+    try {
+        // 1. Verificar disponibilidad de plazas si se aumenta el número de personas
+        if ($diferencia_personas > 0) {
+            $plazas_disponibles = $wpdb->get_var($wpdb->prepare(
+                "SELECT plazas_disponibles FROM $table_servicios WHERE id = %d",
+                $reserva_actual->servicio_id
+            ));
+
+            error_log("Plazas disponibles en servicio {$reserva_actual->servicio_id}: {$plazas_disponibles}");
+
+            if ($plazas_disponibles < $diferencia_personas) {
+                throw new Exception("No hay suficientes plazas disponibles. Se necesitan {$diferencia_personas} plazas adicionales, pero solo hay {$plazas_disponibles} disponibles.");
+            }
+        }
+
+        // 2. Actualizar plazas en el servicio
+        if ($diferencia_personas != 0) {
+            $query_plazas = "UPDATE $table_servicios 
+                           SET plazas_disponibles = plazas_disponibles - %d 
+                           WHERE id = %d";
+            
+            error_log("Query plazas: " . $wpdb->prepare($query_plazas, $diferencia_personas, $reserva_actual->servicio_id));
+            
+            $resultado_plazas = $wpdb->query($wpdb->prepare($query_plazas, $diferencia_personas, $reserva_actual->servicio_id));
+
+            if ($resultado_plazas === false) {
+                error_log('Error SQL en actualización de plazas: ' . $wpdb->last_error);
+                throw new Exception('Error actualizando plazas del servicio: ' . $wpdb->last_error);
+            }
+            
+            error_log("Plazas actualizadas correctamente. Filas afectadas: {$resultado_plazas}");
+        }
+
+        // 3. Verificar qué columnas existen en la tabla antes de actualizar
+        $columns = $wpdb->get_col("DESCRIBE {$table_reservas}");
+        error_log('Columnas disponibles en tabla reservas: ' . print_r($columns, true));
+
+        // 4. Preparar datos de actualización - solo columnas que existen
+        $update_data = array(
+            'adultos' => $adultos,
+            'residentes' => $residentes,
+            'ninos_5_12' => $ninos_5_12,
+            'ninos_menores' => $ninos_menores,
+            'total_personas' => $nuevo_total_personas,
+            'precio_base' => $precio_base,
+            'descuento_total' => $descuento_total,
+            'precio_final' => $precio_final,
+            'updated_at' => current_time('mysql')
+        );
+
+        // Añadir motivo solo si la columna existe
+        if (in_array('motivo_ultima_modificacion', $columns)) {
+            $update_data['motivo_ultima_modificacion'] = $motivo_cambio;
+        }
+
+        error_log('Datos a actualizar: ' . print_r($update_data, true));
+        error_log('WHERE condition: id = ' . $reserva_id);
+
+        // 5. Actualizar datos de la reserva
+        $resultado_reserva = $wpdb->update(
+            $table_reservas,
+            $update_data,
+            array('id' => $reserva_id),
+            array('%d', '%d', '%d', '%d', '%d', '%f', '%f', '%f', '%s'), // Formatos para los valores
+            array('%d') // Formato para WHERE
+        );
+
+        error_log('Resultado de wpdb->update: ' . var_export($resultado_reserva, true));
+        
+        if ($wpdb->last_error) {
+            error_log('Error SQL en actualización de reserva: ' . $wpdb->last_error);
+        }
+
+        if ($resultado_reserva === false) {
+            throw new Exception('Error actualizando los datos de la reserva: ' . ($wpdb->last_error ?: 'Error desconocido'));
+        }
+
+        // 6. Registrar el cambio en un log
+        $admin_user = $_SESSION['reservas_user']['username'] ?? 'super_admin';
+        error_log("RESERVA EDITADA - ID: {$reserva_id} - Admin: {$admin_user} - Motivo: {$motivo_cambio}");
+
+        // 7. Enviar email de confirmación con los nuevos datos
+        $reserva_actualizada = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_reservas WHERE id = %d",
+            $reserva_id
+        ));
+
+        if ($reserva_actualizada && $reserva_actualizada->email) {
+            if (!class_exists('ReservasEmailService')) {
+                require_once RESERVAS_PLUGIN_PATH . 'includes/class-email-service.php';
+            }
+
+            $result = ReservasEmailService::send_customer_confirmation((array) $reserva_actualizada);
+            
+            if (!$result['success']) {
+                error_log('Error enviando email de confirmación después de editar reserva: ' . $result['message']);
+            } else {
+                error_log('Email de confirmación enviado correctamente');
+            }
+        }
+
+        // Confirmar transacción
+        $wpdb->query('COMMIT');
+        error_log('Transacción confirmada exitosamente');
+
+        wp_send_json_success('Reserva actualizada correctamente. Se ha enviado una nueva confirmación al cliente.');
+
+    } catch (Exception $e) {
+        // Rollback en caso de error
+        $wpdb->query('ROLLBACK');
+        error_log('Exception en update_reservation_data: ' . $e->getMessage());
+        error_log('Stack trace: ' . $e->getTraceAsString());
+        wp_send_json_error('Error actualizando la reserva: ' . $e->getMessage());
+    }
+}
 
     /**
      * Obtener informe de reservas por fechas - CON FILTROS MEJORADOS Y INGRESOS CORREGIDOS
@@ -493,16 +683,16 @@ class ReservasReportsAdmin
                 ));
 
                 // Obtener ingresos por agencia - CON SERVICIOS
-$agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
-    "SELECT 
+                $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
+                    "SELECT 
         r.agency_id,
         SUM(r.precio_final) as ingresos_totales
      FROM $table_reservas r
      INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
      $agency_revenue_where
      GROUP BY r.agency_id",
-    ...$agency_revenue_params
-));
+                    ...$agency_revenue_params
+                ));
 
                 // Combinar resultados
                 $stats_por_agencias = array();
@@ -1379,7 +1569,7 @@ $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
         }
 
         $stats = $wpdb->get_row($wpdb->prepare(
-    "SELECT 
+            "SELECT 
         COUNT(*) as total_reservas,
         SUM(adultos) as total_adultos,
         SUM(residentes) as total_residentes,
@@ -1392,9 +1582,9 @@ $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
      FROM $table_reservas 
      WHERE fecha BETWEEN %s AND %s 
      AND estado = 'confirmada'",
-    $fecha_inicio,
-    $fecha_fin
-));
+            $fecha_inicio,
+            $fecha_fin
+        ));
 
         // Obtener reservas por día para gráfico
         $reservas_por_dia = $wpdb->get_results($wpdb->prepare(
@@ -1453,19 +1643,19 @@ $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
             $today
         ));
 
-$ingresos_mes_actual = $wpdb->get_var($wpdb->prepare(
-    "SELECT SUM(precio_final) FROM $table_reservas
+        $ingresos_mes_actual = $wpdb->get_var($wpdb->prepare(
+            "SELECT SUM(precio_final) FROM $table_reservas
  WHERE fecha >= %s AND estado = 'confirmada'",
-    $this_month_start
-)) ?: 0;
+            $this_month_start
+        )) ?: 0;
 
-// 3. INGRESOS DEL MES PASADO (para comparar)
-$ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
-    "SELECT SUM(precio_final) FROM $table_reservas
+        // 3. INGRESOS DEL MES PASADO (para comparar)
+        $ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
+            "SELECT SUM(precio_final) FROM $table_reservas
  WHERE fecha BETWEEN %s AND %s AND estado = 'confirmada'",
-    $last_month_start,
-    $last_month_end
-)) ?: 0;
+            $last_month_start,
+            $last_month_end
+        )) ?: 0;
 
         // 4. CRECIMIENTO PORCENTUAL
         $crecimiento = 0;
@@ -2518,128 +2708,128 @@ $ingresos_mes_pasado = $wpdb->get_var($wpdb->prepare(
      * Generar PDF de ticket para agencias - FUNCIÓN CORREGIDA
      */
     public function generate_agency_ticket_pdf()
-{
-    error_log('=== GENERATE_AGENCY_TICKET_PDF INICIADO ===');
+    {
+        error_log('=== GENERATE_AGENCY_TICKET_PDF INICIADO ===');
 
-    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-        error_log('❌ Error de nonce en generate_agency_ticket_pdf');
-        wp_send_json_error('Error de seguridad');
-        return;
-    }
+        if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+            error_log('❌ Error de nonce en generate_agency_ticket_pdf');
+            wp_send_json_error('Error de seguridad');
+            return;
+        }
 
-    if (!session_id()) {
-        session_start();
-    }
+        if (!session_id()) {
+            session_start();
+        }
 
-    if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'agencia') {
-        error_log('❌ Sin permisos en generate_agency_ticket_pdf');
-        wp_send_json_error('Sin permisos');
-        return;
-    }
+        if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'agencia') {
+            error_log('❌ Sin permisos en generate_agency_ticket_pdf');
+            wp_send_json_error('Sin permisos');
+            return;
+        }
 
-    $reserva_id = intval($_POST['reserva_id']);
-    $agency_id = $_SESSION['reservas_user']['id'];
+        $reserva_id = intval($_POST['reserva_id']);
+        $agency_id = $_SESSION['reservas_user']['id'];
 
-    if (!$reserva_id) {
-        error_log('❌ ID de reserva no válido: ' . $reserva_id);
-        wp_send_json_error('ID de reserva no válido');
-        return;
-    }
+        if (!$reserva_id) {
+            error_log('❌ ID de reserva no válido: ' . $reserva_id);
+            wp_send_json_error('ID de reserva no válido');
+            return;
+        }
 
-    error_log('🔍 Procesando reserva ID: ' . $reserva_id . ' para agencia ID: ' . $agency_id);
+        error_log('🔍 Procesando reserva ID: ' . $reserva_id . ' para agencia ID: ' . $agency_id);
 
-    try {
-        global $wpdb;
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+        try {
+            global $wpdb;
+            $table_reservas = $wpdb->prefix . 'reservas_reservas';
+            $table_servicios = $wpdb->prefix . 'reservas_servicios';
 
-        // Verificar que la reserva pertenece a la agencia
-        $reserva = $wpdb->get_row($wpdb->prepare(
-            "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente, s.hora_vuelta 
+            // Verificar que la reserva pertenece a la agencia
+            $reserva = $wpdb->get_row($wpdb->prepare(
+                "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente, s.hora_vuelta 
          FROM $table_reservas r
          LEFT JOIN $table_servicios s ON r.servicio_id = s.id
          WHERE r.id = %d AND r.agency_id = %d",
-            $reserva_id,
-            $agency_id
-        ));
+                $reserva_id,
+                $agency_id
+            ));
 
-        if (!$reserva) {
-            error_log('❌ Reserva no encontrada o sin permisos: reserva_id=' . $reserva_id . ', agency_id=' . $agency_id);
-            wp_send_json_error('Reserva no encontrada o sin permisos');
-            return;
+            if (!$reserva) {
+                error_log('❌ Reserva no encontrada o sin permisos: reserva_id=' . $reserva_id . ', agency_id=' . $agency_id);
+                wp_send_json_error('Reserva no encontrada o sin permisos');
+                return;
+            }
+
+            error_log('✅ Reserva encontrada para agencia: ' . print_r($reserva, true));
+
+            $reserva_data = array(
+                'localizador' => $reserva->localizador,
+                'fecha' => $reserva->fecha,
+                'hora' => $reserva->hora,
+                'hora_vuelta' => $reserva->hora_vuelta ?? '',
+                'nombre' => $reserva->nombre,
+                'apellidos' => $reserva->apellidos,
+                'email' => $reserva->email,
+                'telefono' => $reserva->telefono,
+                'adultos' => $reserva->adultos,
+                'residentes' => $reserva->residentes,
+                'ninos_5_12' => $reserva->ninos_5_12,
+                'ninos_menores' => $reserva->ninos_menores,
+                'total_personas' => $reserva->total_personas,
+                'created_at' => $reserva->created_at,
+                'metodo_pago' => 'agencia',
+                // ✅ AÑADIR FLAGS PARA OCULTAR PRECIOS
+                'hide_prices' => true,
+                'is_agency_pdf' => true,
+                // ✅ AÑADIR VALORES POR DEFECTO PARA EVITAR ERRORES
+                'precio_base' => 0,
+                'descuento_total' => 0,
+                'precio_final' => 0
+            );
+
+            error_log('📋 Datos preparados para PDF de agencia (sin precios): ' . print_r($reserva_data, true));
+
+            // Generar PDF
+            if (!class_exists('ReservasPDFGenerator')) {
+                require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
+            }
+
+            $pdf_generator = new ReservasPDFGenerator();
+            $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
+
+            if (!$pdf_path || !file_exists($pdf_path)) {
+                error_log('❌ PDF no se generó correctamente para agencia');
+                wp_send_json_error('Error generando el PDF');
+                return;
+            }
+
+            error_log('✅ PDF generado para agencia: ' . $pdf_path);
+            error_log('📁 Tamaño del archivo: ' . filesize($pdf_path) . ' bytes');
+
+            // ✅ CREAR URL PÚBLICO CORRECTO - IGUAL QUE EN LAS OTRAS FUNCIONES
+            $upload_dir = wp_upload_dir();
+            $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
+            $pdf_url = $upload_dir['baseurl'] . $relative_path;
+
+            error_log('🌐 URL del PDF para agencia: ' . $pdf_url);
+
+            // Programar eliminación del archivo después de 1 hora
+            wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
+
+            wp_send_json_success(array(
+                'pdf_url' => $pdf_url,
+                'pdf_path' => $pdf_path,
+                'localizador' => $reserva->localizador,
+                'filename' => 'billete_' . $reserva->localizador . '.pdf',
+                'file_exists' => file_exists($pdf_path),
+                'file_size' => filesize($pdf_path),
+                'agency_id' => $agency_id
+            ));
+        } catch (Exception $e) {
+            error_log('❌ Exception en generate_agency_ticket_pdf: ' . $e->getMessage());
+            error_log('❌ Stack trace: ' . $e->getTraceAsString());
+            wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
         }
-
-        error_log('✅ Reserva encontrada para agencia: ' . print_r($reserva, true));
-
-        $reserva_data = array(
-    'localizador' => $reserva->localizador,
-    'fecha' => $reserva->fecha,
-    'hora' => $reserva->hora,
-    'hora_vuelta' => $reserva->hora_vuelta ?? '',
-    'nombre' => $reserva->nombre,
-    'apellidos' => $reserva->apellidos,
-    'email' => $reserva->email,
-    'telefono' => $reserva->telefono,
-    'adultos' => $reserva->adultos,
-    'residentes' => $reserva->residentes,
-    'ninos_5_12' => $reserva->ninos_5_12,
-    'ninos_menores' => $reserva->ninos_menores,
-    'total_personas' => $reserva->total_personas,
-    'created_at' => $reserva->created_at,
-    'metodo_pago' => 'agencia',
-    // ✅ AÑADIR FLAGS PARA OCULTAR PRECIOS
-    'hide_prices' => true,
-    'is_agency_pdf' => true,
-    // ✅ AÑADIR VALORES POR DEFECTO PARA EVITAR ERRORES
-    'precio_base' => 0,
-    'descuento_total' => 0,
-    'precio_final' => 0
-);
-
-        error_log('📋 Datos preparados para PDF de agencia (sin precios): ' . print_r($reserva_data, true));
-
-        // Generar PDF
-        if (!class_exists('ReservasPDFGenerator')) {
-            require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
-        }
-
-        $pdf_generator = new ReservasPDFGenerator();
-        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_data);
-
-        if (!$pdf_path || !file_exists($pdf_path)) {
-            error_log('❌ PDF no se generó correctamente para agencia');
-            wp_send_json_error('Error generando el PDF');
-            return;
-        }
-
-        error_log('✅ PDF generado para agencia: ' . $pdf_path);
-        error_log('📁 Tamaño del archivo: ' . filesize($pdf_path) . ' bytes');
-
-        // ✅ CREAR URL PÚBLICO CORRECTO - IGUAL QUE EN LAS OTRAS FUNCIONES
-        $upload_dir = wp_upload_dir();
-        $relative_path = str_replace($upload_dir['basedir'], '', $pdf_path);
-        $pdf_url = $upload_dir['baseurl'] . $relative_path;
-
-        error_log('🌐 URL del PDF para agencia: ' . $pdf_url);
-
-        // Programar eliminación del archivo después de 1 hora
-        wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
-
-        wp_send_json_success(array(
-            'pdf_url' => $pdf_url,
-            'pdf_path' => $pdf_path,
-            'localizador' => $reserva->localizador,
-            'filename' => 'billete_' . $reserva->localizador . '.pdf',
-            'file_exists' => file_exists($pdf_path),
-            'file_size' => filesize($pdf_path),
-            'agency_id' => $agency_id
-        ));
-    } catch (Exception $e) {
-        error_log('❌ Exception en generate_agency_ticket_pdf: ' . $e->getMessage());
-        error_log('❌ Stack trace: ' . $e->getTraceAsString());
-        wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
     }
-}
 
     /**
      * Solicitar cancelación de reserva por parte de agencia
