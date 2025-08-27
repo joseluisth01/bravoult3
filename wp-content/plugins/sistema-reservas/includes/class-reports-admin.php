@@ -586,110 +586,135 @@ class ReservasReportsAdmin
                 ));
             }
 
-            // ✅ ESTADÍSTICAS POR AGENCIAS (SI NO SE FILTRA POR UNA ESPECÍFICA) - CON FILTRO DE HORARIOS CORREGIDO
 $stats_por_agencias = null;
 if ($agency_filter === 'todas') {
     // ✅ USAR EXACTAMENTE LAS MISMAS CONDICIONES QUE PARA LAS ESTADÍSTICAS GENERALES
-    $agency_base_conditions = $stats_base_conditions; // ✅ REUTILIZAR CONDICIONES BASE
-    $agency_base_params = $stats_base_params; // ✅ REUTILIZAR PARÁMETROS BASE
+    $agency_base_conditions = array();
+    $agency_base_params = array();
 
-    // Conteos por agencia (respetan filtro de estado)
-    $agency_count_conditions = $agency_base_conditions;
-    $agency_count_params = $agency_base_params;
+    // Aplicar filtros de fecha
+    if ($tipo_fecha === 'compra') {
+        $agency_base_conditions[] = "DATE(r.created_at) BETWEEN %s AND %s";
+    } else {
+        $agency_base_conditions[] = "r.fecha BETWEEN %s AND %s";
+    }
+    $agency_base_params[] = $fecha_inicio;
+    $agency_base_params[] = $fecha_fin;
 
+    // ✅ APLICAR FILTRO DE HORARIOS TAMBIÉN EN AGENCIAS
+    if (!empty($selected_schedules)) {
+        $selected_schedules_json = $selected_schedules;
+        if (strpos($selected_schedules_json, '\\') !== false) {
+            $selected_schedules_json = stripslashes($selected_schedules_json);
+        }
+
+        $selected_schedules_array = json_decode($selected_schedules_json, true);
+
+        if (is_array($selected_schedules_array) && !empty($selected_schedules_array)) {
+            $schedule_conditions = array();
+
+            foreach ($selected_schedules_array as $schedule) {
+                if (!empty($schedule['hora'])) {
+                    $hora_normalizada = date('H:i:s', strtotime($schedule['hora']));
+
+                    if (
+                        !empty($schedule['hora_vuelta']) &&
+                        $schedule['hora_vuelta'] !== 'null' &&
+                        $schedule['hora_vuelta'] !== '' &&
+                        $schedule['hora_vuelta'] !== '00:00:00'
+                    ) {
+                        $vuelta_normalizada = date('H:i:s', strtotime($schedule['hora_vuelta']));
+                        $schedule_conditions[] = "(s.hora = %s AND s.hora_vuelta = %s)";
+                        $agency_base_params[] = $hora_normalizada;
+                        $agency_base_params[] = $vuelta_normalizada;
+                    } else {
+                        $schedule_conditions[] = "(s.hora = %s)";
+                        $agency_base_params[] = $hora_normalizada;
+                    }
+                }
+            }
+
+            if (!empty($schedule_conditions)) {
+                $horarios_where = '(' . implode(' OR ', $schedule_conditions) . ')';
+                $agency_base_conditions[] = $horarios_where;
+            }
+        }
+    }
+
+    // ✅ CONSULTA UNIFICADA PARA AGENCIAS - UNA SOLA QUERY
+    $agency_conditions = $agency_base_conditions;
+    $agency_params = $agency_base_params;
+
+    // Solo contabilizar reservas confirmadas para ingresos, pero todas para conteos según filtro
     switch ($estado_filtro) {
         case 'confirmadas':
-            $agency_count_conditions[] = "r.estado = 'confirmada'";
+            $agency_conditions[] = "r.estado = 'confirmada'";
             break;
         case 'canceladas':
-            $agency_count_conditions[] = "r.estado = 'cancelada'";
+            $agency_conditions[] = "r.estado = 'cancelada'";
             break;
         case 'todas':
-            // No añadir condición
+            // No añadir condición - mostrar todas
             break;
     }
 
-    // Ingresos por agencia (siempre solo confirmadas)
-    $agency_revenue_conditions = $agency_base_conditions;
-    $agency_revenue_conditions[] = "r.estado = 'confirmada'";
-    $agency_revenue_params = $agency_base_params;
+    $agency_where = 'WHERE ' . implode(' AND ', $agency_conditions);
 
-    $agency_count_where = 'WHERE ' . implode(' AND ', $agency_count_conditions);
-    $agency_revenue_where = 'WHERE ' . implode(' AND ', $agency_revenue_conditions);
-
-    // ✅ OBTENER CONTEOS POR AGENCIA - CON SERVICIOS Y FILTROS APLICADOS
-    $agency_count_stats = $wpdb->get_results($wpdb->prepare(
-        "SELECT 
+    // ✅ QUERY SIMPLIFICADA - OBTENER TODO EN UNA SOLA CONSULTA
+    $agency_stats_query = "
+        SELECT 
             r.agency_id,
+            a.agency_name,
             COUNT(*) as total_reservas,
             SUM(r.total_personas) as total_personas,
             SUM(r.adultos) as total_adultos,
             SUM(r.residentes) as total_residentes,
             SUM(r.ninos_5_12) as total_ninos_5_12,
-            SUM(r.ninos_menores) as total_ninos_menores
+            SUM(r.ninos_menores) as total_ninos_menores,
+            -- Solo sumar ingresos de reservas confirmadas
+            SUM(CASE WHEN r.estado = 'confirmada' THEN r.precio_final ELSE 0 END) as ingresos_total
         FROM $table_reservas r
         INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-        $agency_count_where
-        GROUP BY r.agency_id",
-        ...$agency_count_params
-    ));
+        LEFT JOIN $table_agencies a ON r.agency_id = a.id
+        $agency_where
+        GROUP BY r.agency_id, a.agency_name
+        ORDER BY total_reservas DESC
+        LIMIT 10
+    ";
 
-    // ✅ OBTENER INGRESOS POR AGENCIA - CON SERVICIOS Y FILTROS APLICADOS
-    $agency_revenue_stats = $wpdb->get_results($wpdb->prepare(
-        "SELECT 
-            r.agency_id,
-            SUM(r.precio_final) as ingresos_totales
-        FROM $table_reservas r
-        INNER JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
-        $agency_revenue_where
-        GROUP BY r.agency_id",
-        ...$agency_revenue_params
-    ));
+    error_log('=== QUERY DE AGENCIAS ===');
+    error_log('Query: ' . $agency_stats_query);
+    error_log('Params: ' . print_r($agency_params, true));
 
-    // Combinar resultados
-    $stats_por_agencias = array();
-    $revenue_by_agency = array();
+    $stats_por_agencias_raw = $wpdb->get_results($wpdb->prepare($agency_stats_query, ...$agency_params));
 
-    // Indexar ingresos por agency_id
-    foreach ($agency_revenue_stats as $revenue) {
-        $revenue_by_agency[$revenue->agency_id ?? 'null'] = $revenue->ingresos_totales;
+    if ($wpdb->last_error) {
+        error_log('❌ Error en query de agencias: ' . $wpdb->last_error);
     }
 
-    // Crear estadísticas combinadas
-    foreach ($agency_count_stats as $count) {
-        $agency_id = $count->agency_id;
-        $agency_key = $agency_id ?? 'null';
+    error_log('=== RESULTADOS AGENCIAS ===');
+    error_log('Número de agencias encontradas: ' . count($stats_por_agencias_raw));
+    error_log('Datos: ' . print_r($stats_por_agencias_raw, true));
 
-        // Obtener nombre de agencia
-        if ($agency_id) {
-            $agency_name = $wpdb->get_var($wpdb->prepare(
-                "SELECT agency_name FROM $table_agencies WHERE id = %d",
-                $agency_id
-            ));
-        } else {
-            $agency_name = 'Sin Agencia';
-        }
-
+    // Formatear resultados
+    $stats_por_agencias = array();
+    foreach ($stats_por_agencias_raw as $stat) {
+        $agency_name = $stat->agency_name ?: 'Sin Agencia';
+        
         $stats_por_agencias[] = (object) array(
             'agency_name' => $agency_name,
-            'agency_id' => $agency_id,
-            'total_reservas' => (int) $count->total_reservas,
-            'total_personas' => (int) $count->total_personas,
-            'ingresos_total' => (float) ($revenue_by_agency[$agency_key] ?? 0),
-            'total_adultos' => isset($count->total_adultos) ? (int) $count->total_adultos : 0,
-            'total_residentes' => isset($count->total_residentes) ? (int) $count->total_residentes : 0,
-            'total_ninos_5_12' => isset($count->total_ninos_5_12) ? (int) $count->total_ninos_5_12 : 0,
-            'total_ninos_menores' => isset($count->total_ninos_menores) ? (int) $count->total_ninos_menores : 0
+            'agency_id' => $stat->agency_id,
+            'total_reservas' => (int) $stat->total_reservas,
+            'total_personas' => (int) $stat->total_personas,
+            'ingresos_total' => (float) $stat->ingresos_total,
+            'total_adultos' => (int) ($stat->total_adultos ?? 0),
+            'total_residentes' => (int) ($stat->total_residentes ?? 0),
+            'total_ninos_5_12' => (int) ($stat->total_ninos_5_12 ?? 0),
+            'total_ninos_menores' => (int) ($stat->total_ninos_menores ?? 0)
         );
     }
 
-    // Ordenar por total de reservas
-    usort($stats_por_agencias, function ($a, $b) {
-        return $b->total_reservas - $a->total_reservas;
-    });
-
-    // Limitar a 10 resultados
-    $stats_por_agencias = array_slice($stats_por_agencias, 0, 10);
+    error_log('✅ Agencias procesadas para mostrar: ' . count($stats_por_agencias));
 }
 
             $response_data = array(
